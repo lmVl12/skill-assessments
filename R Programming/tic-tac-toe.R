@@ -8,7 +8,6 @@ if (interactive()) {
 }
 
 # --- Global Constants ---
-# Global 'wins' accessible by all functions
 wins <- list(
   c(1, 2, 3), c(4, 5, 6), c(7, 8, 9), # Rows
   c(1, 4, 7), c(2, 5, 8), c(3, 6, 9), # Cols
@@ -51,97 +50,110 @@ get_valid_input <- function(prompt_msg, valid_options) {
   }
 }
 
-# --- Main Game Loop ---
+# --- Main Game Function ---
 
 play_game <- function() {
-  cat("=== Welcome to R Tic-Tac-Toe! ===\n")
-  Sys.sleep(0.5)
-  
-  player_sym <- get_valid_input("Do you want to be X or O? ", c("X", "O"))
+  cat("\n--- NEW MATCH ---")
+  player_sym <- get_valid_input("\nDo you want to be X or O? ", c("X", "O"))
   comp_sym <- if (player_sym == "X") "O" else "X"
   
   board <- rep(NA, 9)
-  current_turn <- "X" # X always goes first
-  winner <- NULL
+  current_turn <- "X" # X always starts
+  winner_sym <- NULL
   
-  cat(sprintf("\nGame Start! You are %s. Computer is %s.\n", player_sym, comp_sym))
-  
-  while (is.null(winner)) {
+  while (is.null(winner_sym)) {
     display_board(board)
     
     if (current_turn == player_sym) {
-      # --- Player Turn ---
       cat("Your turn!\n")
       available_moves <- as.character(which(is.na(board)))
       move_input <- get_valid_input("Choose a position (1-9): ", available_moves)
       board[as.numeric(move_input)] <- player_sym
     } else {
-      # --- Computer Turn (Aggressive AI) ---
       cat("Computer is thinking...\n")
-      Sys.sleep(1)
-      
+      Sys.sleep(0.8)
       available_moves <- which(is.na(board))
       move <- NULL
       
-      # 1. First Move Randomness
+      # AI Strategy
       if (sum(!is.na(board)) <= 1) {
         move <- if(length(available_moves) > 1) sample(available_moves, 1) else available_moves
       } else {
-        # 2. IMMEDIATE WIN
+        # 1. Win
         for (combo in wins) {
           line <- board[combo]
           if (sum(line == comp_sym, na.rm = TRUE) == 2 && sum(is.na(line)) == 1) {
-            move <- combo[is.na(line)]
-            break
+            move <- combo[is.na(line)]; break
           }
         }
-        
-        # 3. STRATEGIC ATTACK (Open Road)
+        # 2. Attack
         if (is.null(move)) {
           for (combo in wins) {
             line <- board[combo]
             if (sum(line == comp_sym, na.rm = TRUE) >= 1 && sum(line == player_sym, na.rm = TRUE) == 0) {
               potential <- combo[is.na(line)]
-              move <- if(length(potential) > 1) sample(potential, 1) else potential
-              break
+              move <- if(length(potential) > 1) sample(potential, 1) else potential; break
             }
           }
         }
-        
-        # 4. DEFENSIVE BLOCK
+        # 3. Block
         if (is.null(move)) {
           for (combo in wins) {
             line <- board[combo]
             if (sum(line == player_sym, na.rm = TRUE) == 2 && sum(is.na(line)) == 1) {
-              move <- combo[is.na(line)]
-              break
+              move <- combo[is.na(line)]; break
             }
           }
         }
       }
-      
-      # 5. Fallback
-      if (is.null(move)) {
-        move <- if(length(available_moves) > 1) sample(available_moves, 1) else available_moves
-      }
-      
+      if (is.null(move)) move <- if(length(available_moves) > 1) sample(available_moves, 1) else available_moves
       board[move] <- comp_sym
-      cat(sprintf("Computer chose position %d\n", move))
     }
-    
-    winner <- check_winner(board)
+    winner_sym <- check_winner(board)
     current_turn <- if (current_turn == "X") "O" else "X"
   }
   
-  # --- Game Over ---
   display_board(board)
-  if (winner == "Tie") {
-    cat("It's a draw! Well played.\n")
-  } else if (winner == player_sym) {
-    cat("Congratulations! You won!\n")
+  
+  # Determine the result for the scoreboard
+  if (winner_sym == "Tie") {
+    cat("Result: It's a draw!\n")
+    return("tie")
+  } else if (winner_sym == player_sym) {
+    cat("Result: You won this round!\n")
+    return("human")
   } else {
-    cat("The computer won. Better luck next time!\n")
+    cat("Result: Computer won this round.\n")
+    return("computer")
   }
 }
 
-play_game()
+# --- Session Management ---
+
+score <- list(human = 0, computer = 0, ties = 0)
+
+cat("=== Welcome to R Tic-Tac-Toe! ===\n")
+
+while (TRUE) {
+  result <- play_game()
+  
+  # Update internal score list
+  if (result == "human") score$human <- score$human + 1
+  if (result == "computer") score$computer <- score$computer + 1
+  if (result == "tie") score$ties <- score$ties + 1
+  
+  # Ask to continue
+  choice <- get_valid_input("\nWould you like to play another match? (Y/N): ", c("Y", "N"))
+  
+  if (choice == "N") {
+    cat("\n" , paste(rep("=", 20), collapse = ""), "\n")
+    cat("      FINAL SCORE\n")
+    cat(paste(rep("-", 20), collapse = ""), "\n")
+    cat(sprintf("  Human:    %d\n", score$human))
+    cat(sprintf("  Computer: %d\n", score$computer))
+    cat(sprintf("  Ties:     %d\n", score$ties))
+    cat(paste(rep("=", 20), collapse = ""), "\n")
+    cat("Thank you for playing! Goodbye.\n")
+    break
+  }
+}
