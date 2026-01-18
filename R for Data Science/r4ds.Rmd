@@ -292,4 +292,29 @@ ggplot(comparison_df, aes(x = continent, y = `Imports of goods and services (% o
 ```
 This boxplot confirms the initial hypothesis: Asia has a large number of extreme outliers compared to Europe, which could cause the arithmetic means to differ. However, a comparison of the medians demonstrates just how similar these two distributions actually are.
 
+## Global Demographic Benchmarks
+
+### Population Density Champions
+
+Question 3. What is the country (or countries) that has the highest Population density (people per sq. km of land area) across all years? (i.e., which country has the highest average ranking in this category across each time point in the dataset?)
+
+```{r population density leaderboard}
+pop_data <- original_data |>
+  # Hide the missing data
+  filter(!is.na(`Population density (people per sq. km of land area)`)) |>
+  group_by(Year) |>
+  mutate(rank = min_rank(desc(`Population density (people per sq. km of land area)`))) |>
+  ungroup() |>
+  group_by(`Country Name`) |>
+  summarise(
+    average_rank = mean(rank, na.rm = TRUE),
+    total_observations = n()
+  ) |>
+  # Sort according to the average rank
+  arrange(average_rank) |>
+  slice_min(average_rank, n = 10)
+pop_data
+```
+
+Macao SAR, China and Monaco are the top-ranked territories, maintaining a peak average rank of 1.5 over the 10-year period. To evaluate leadership stability rather than a single-year snapshot, annual ranking was used instead of mean values. Continent-based filtering was intentionally avoided, as these territories frequently have missing (NA) values in the continent field. Including these official statistical units ensures accuracy, as their exclusion would have incorrectly identified Singapore as the leader, failing the criteria for the highest density in the data set.
 
