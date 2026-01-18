@@ -257,6 +257,22 @@ ggplot(comparison_df, aes(sample = `Imports of goods and services (% of GDP)`)) 
   ) +
   theme_bw()
 ```
+Both data-sets do not follow a normal distribution (deviations from the reference line are clearly visible at both the lower and upper quantiles), and the p-values are significantly lower than 0.05. Consequently, the non-parametric Mann-Whitney U test (Wilcoxon rank-sum test for independent samples) should be applied to compare the two continents.
+
+```{r Mann-Whitney U test}
+final_test <- wilcox.test(
+  `Imports of goods and services (% of GDP)` ~
+    continent,
+  data = comparison_df
+)
+final_test_table <- final_test |> # Transform to the table
+  tidy() |>
+  kable(digits = 3, caption = "Mann-Whitney U test results")
+# Show results
+final_test_table
+```
+
+The null hypothesis ($H_0$) for the Mann-Whitney U test states that there is no difference between the distributions of imports in Asia and Europe. Given the p-value of 0.787 (considerably higher than the 0.05 threshold), we fail to reject $H_0$, indicating that any observed differences between the two continents are likely due to chance.
 
 
 
