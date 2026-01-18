@@ -20,13 +20,11 @@ knitr::opts_chunk$set(
 ### Core libraries
 
 ```{r packages}
-library(tidyverse)   # Core suite for data manipulation and visualization
-library(plotly)      # Dynamic and interactive web-based plots
-library(broom)       # Converts statistical models into tidy data frames
-library(knitr)       # General-purpose tool for tables
-library(kableExtra)  # Advanced styling tables
-
-
+library(tidyverse) # Core suite for data manipulation and visualization
+library(plotly) # Dynamic and interactive web-based plots
+library(broom) # Converts statistical models into tidy data frames
+library(knitr) # General-purpose tool for tables
+library(kableExtra) # Advanced styling tables
 ```
 ### Dataset acquisition
 
@@ -121,3 +119,38 @@ max_cor_year <- cor_by_year |>
 So, the year with the strongest correlation is `r max_cor_year`.
 Now let's focus and discover this period of time by making simple visualizations
 
+```{r visualization of the cor.test result year}
+# Data Preparation: filtering out entities without continent information
+data_max_cor <- original_data |>
+  filter(Year == max_cor_year) |>
+  filter(!is.na(continent))
+
+# Plot setup
+plot_2 <- ggplot(
+  data_max_cor,
+  aes(
+    x = gdpPercap,
+    y = `CO2 emissions (metric tons per capita)`,
+    color = continent, # Core: add a third dimension (continents)
+    size = pop, # Core: add a fourth dimension (population)
+    text = paste(
+      "Country:", `Country Name`, # Define hover tooltip content
+      "<br>GDP per capita:", gdpPercap,
+      "<br>CO2:", round(`CO2 emissions (metric tons per capita)`, 2), "t/capita",
+      "<br>Population:", pop
+    )
+  )
+) +
+  # Add scatterplot with semitransparent dots (na.rm to avoid warnings)
+  geom_point(alpha = 0.7, na.rm = TRUE) +
+  scale_x_log10() +
+  scale_y_log10() +
+  scale_size_continuous(guide = "none") + # Hide size legend for better readability
+  theme_classic() +
+  labs( # Guides
+    title = paste("Global correlation between GDP and CO2 emissions in", max_cor_year),
+    color = "Continent"
+  )
+# Make interactive
+ggplotly(plot_2, tooltip = "text")
+```
