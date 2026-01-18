@@ -95,4 +95,29 @@ correlation_table <- tidy(cor_results) |>
 # Show results
 correlation_table
 ```
+The high correlation between GDP per capita and CO₂ emissions - `r round(cor_results$estimate, 3)`
+with a low p-value of `r format.pval(cor_results$p.value, digits = 3, eps = .Machine$double.eps)` indicate a statistically significant and strong positive correlation between the variables.
+
+The objective is to identify the specific year in which the correlation between GDP per capita and CO₂ emissions reached its peak. While `cor.test()` provides a more comprehensive statistical output, the simpler `cor()` function is preferred for grouped data processing to efficiently compute and compare coefficients across multiple years.
+
+```{r correlation in groups }
+# Correlation test in groups
+cor_by_year <- original_data |>
+  group_by(Year) |>
+  summarise(
+    correlation = cor(
+      gdpPercap,
+      `CO2 emissions (metric tons per capita)`,
+      use = "complete.obs"
+    ),
+    .groups = "drop"
+  )
+# Find out which year has the strongest correlation
+max_cor_year <- cor_by_year |>
+  filter(correlation == max(correlation)) |>
+  pull(Year)
+```
+
+So, the year with the strongest correlation is `r max_cor_year`.
+Now let's focus and discover this period of time by making simple visualizations
 
