@@ -217,6 +217,46 @@ original_data |>
 
 ```
 
+### Comparative analysis of import reliance: Europe vs. Asia
+
+Question 2.Is there a significant difference between Europe and Asia with respect to 'Imports of goods and services (% of GDP)' in the years after 1990?
+
+This is a classic statistical problem: comparing two groups to determine whether a significant difference exists between them. Our grouping (independent) variable is categorical with exactly two levels. The dependent variable is continuous (interval/ratio).
+
+Following the standard statistical flowchart, the Independent Samples T-test was selected. A key prerequisite for this test is that the data within both groups must follow a normal distribution. To verify this assumption, the Shapiro-Wilk test can be employed. If the p-value is less than 0.05, the null hypothesis of normality is rejected, indicating that the distribution cannot be considered normal.
+
+```{r Shapiro-Wilk for Europe and Asia}
+# Preparing the data
+comparison_df <- original_data |>
+  filter(Year > 1990) |>
+  filter(continent %in% c("Europe", "Asia"))
+
+# # Shapiro-Wilk test results for visualization labels
+p_labels <- comparison_df |>
+  group_by(continent) |>
+  summarise(
+    p_val = shapiro.test(`Imports of goods and services (% of GDP)`)$p.value,
+    # Adding a p-value to each facet
+    label = paste0("p = ", format(p_val, digits = 3))
+  )
+
+# Generate Q-Q plot to check normality
+ggplot(comparison_df, aes(sample = `Imports of goods and services (% of GDP)`)) +
+  stat_qq() +
+  stat_qq_line(color = "red") +
+  # Annotations
+  geom_text(
+    data = p_labels, aes(x = -1.5, y = 150, label = label),
+    inherit.aes = FALSE, color = "blue", size = 4, hjust = 0
+  ) +
+  facet_wrap(~continent) +
+  labs(
+    title = "Shapiro-Wilk normality test: Imports of goods and services (% of GDP) ",
+    x = "Theoretical quantiles",
+    y = "Sample quantiles (%GDP)"
+  ) +
+  theme_bw()
+```
 
 
 
