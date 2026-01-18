@@ -1,0 +1,72 @@
+---
+title: "Gapminder analysis"
+output: html_document
+date: "`r Sys.Date()`"
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, # show code
+  warning = FALSE, # hide warnings
+  message = FALSE, # hide messages
+  fig.align = "center" # alignment of the figures
+)
+```
+## Technical Framework
+
+### Core libraries
+
+```{r packages}
+library(tidyverse)   # Core suite for data manipulation and visualization
+library(plotly)      # Dynamic and interactive web-based plots
+```
+### Dataset acquisition
+
+To simply read the file R has in-built tools, but it can result in a simple data.frame.
+`read_csv` returns a `tibble` (a compact style with auto-defined data types and is faster with the big files)
+
+```{r data read}
+original_data <- read_csv("data/gapminder_clean.csv")
+```
+## Global wealth vs. carbon footprint
+
+### Snapshot of 1962: The economic-environmental link
+
+Data for 1962 was extracted and log-transformed to manage crowded areas on the plot. 
+To ensure convenience, axis ticks display the raw data values.
+
+```{r plot 1(Q1)}
+# Data preparation
+filtered_data <- original_data |>
+  filter(Year == 1962) # Extract the subset for 1962
+
+# Plotting
+plot_1 <- ggplot(
+  filtered_data,
+  aes(
+    x = gdpPercap,
+    y = `CO2 emissions (metric tons per capita)`, # Configure the plot axes
+    text = paste(
+      "Country:", `Country Name`, # Define hover tooltip content
+      "<br>GDP per capita:", gdpPercap,
+      "<br>CO2:", `CO2 emissions (metric tons per capita)`
+    )
+  )
+) +
+  geom_point(alpha = 0.6) + # Add scatterplot with semitransparent dots
+  scale_x_log10() + # Functional requirement: log scale for GDP
+  scale_y_log10() + # Functional requirement: log scale for CO2
+  theme_classic()
+
+# Plot appearance
+ggplotly(plot_1, tooltip = "text") # Make interactive
+```
+A specific data point represents a suspicious outlier, warranting further inspection of the underlying data.
+
+A review of the literature reveals the following findings.
+The spike in Kuwait’s CO₂ emissions in 1962—which reached world-record levels on a per capita basis—was primarily driven by the massive flaring of associated petroleum gas.
+During this period, the country rapidly expanded oil production following its independence (1961), but lacked the infrastructure to capture or utilize the natural gas released during extraction, resulting in it being burned off as waste.
+Because these vast industrial emissions were divided by a relatively small population (358,266 people at the time - according to this data set), the mathematical result was an extreme statistical anomaly that far exceeded the per capita output of even the most industrialized Western nations.
