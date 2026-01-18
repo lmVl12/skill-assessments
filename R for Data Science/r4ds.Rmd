@@ -1,6 +1,14 @@
 ---
 title: "Gapminder analysis"
-output: html_document
+output: 
+  html_document:
+    theme: lumen        
+    highlight: tango     
+    toc: true            
+    toc_float: true
+    code_folding: hide 
+    number_sections: true     
+    df_print: paged      
 date: "`r Sys.Date()`"
 editor_options: 
   markdown: 
@@ -11,10 +19,16 @@ editor_options:
 knitr::opts_chunk$set(
   echo = TRUE, # show code
   warning = FALSE, # hide warnings
-  message = FALSE # hide messages
+  message = FALSE, # hide messages
+  fig.align = "center" # alignment of the figures
 )
 ```
-
+```{css, echo=FALSE}
+.html-widget {
+  margin: auto !important;
+  display: block;
+}
+```
 ## Technical Framework
 
 ### Core libraries
