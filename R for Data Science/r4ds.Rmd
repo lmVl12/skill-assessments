@@ -274,5 +274,22 @@ final_test_table
 
 The null hypothesis ($H_0$) for the Mann-Whitney U test states that there is no difference between the distributions of imports in Asia and Europe. Given the p-value of 0.787 (considerably higher than the 0.05 threshold), we fail to reject $H_0$, indicating that any observed differences between the two continents are likely due to chance.
 
+```{r boxplot fo import in Europe and Asia}
+ggplot(comparison_df, aes(x = continent, y = `Imports of goods and services (% of GDP)`, fill = continent)) +
+  geom_boxplot(alpha = 0.7) +
+  # Add jitter for clarity
+  geom_jitter(width = 0.2, alpha = 0.3) +
+  labs(
+    title = "Import comparison: Europe vs Asia",
+    subtitle = paste("Wilcoxon test p-value =", round(final_test$p.value, 4)),
+    x = "Continent",
+    y = "Import (% GDP)",
+    caption = "Data after 1990"
+  ) +
+  theme_classic() +
+  theme(legend.position = "none") +
+  scale_fill_brewer(palette = "Accent")
+```
+This boxplot confirms the initial hypothesis: Asia has a large number of extreme outliers compared to Europe, which could cause the arithmetic means to differ. However, a comparison of the medians demonstrates just how similar these two distributions actually are.
 
 
