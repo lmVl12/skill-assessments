@@ -20,12 +20,11 @@ knitr::opts_chunk$set(
 ### Core libraries
 
 ```{r packages}
-library(tidyverse)  # Core suite for data manipulation and visualization
-library(plotly)     # Dynamic and interactive web-based plots
-library(broom)      # Converts statistical models into tidy data frames
-library(knitr)      # General-purpose tool for tables
+library(tidyverse) # Core suite for data manipulation and visualization
+library(plotly) # Dynamic and interactive web-based plots
+library(broom) # Converts statistical models into tidy data frames
+library(knitr) # General-purpose tool for tables
 library(kableExtra) # Advanced styling tables
-
 ```
 ### Dataset acquisition
 
@@ -214,7 +213,6 @@ original_data |>
     x = "Continent",
     y = "% of missing values"
   )
-
 ```
 
 ### Comparative analysis of import reliance: Europe vs. Asia
@@ -318,3 +316,25 @@ pop_data
 
 Macao SAR, China and Monaco are the top-ranked territories, maintaining a peak average rank of 1.5 over the 10-year period. To evaluate leadership stability rather than a single-year snapshot, annual ranking was used instead of mean values. Continent-based filtering was intentionally avoided, as these territories frequently have missing (NA) values in the continent field. Including these official statistical units ensures accuracy, as their exclusion would have incorrectly identified Singapore as the leader, failing the criteria for the highest density in the data set.
 
+### Half a century of progress: life expectancy gains
+
+Question 4. What country (or countries) has shown the greatest increase in 'Life expectancy at birth, total (years)' between 1962 and 2007?
+
+```{r Life expactancy leaderboard}
+life_data <- original_data |>
+  filter(Year >= 1962 & Year <= 2007) |>
+  filter(!is.na(Year)) |>
+  filter(!is.na(`Life expectancy at birth, total (years)`)) |>
+  group_by(`Country Name`) |>
+  summarise(
+    year_start = min(Year),
+    start_val = `Life expectancy at birth, total (years)`[which.min(Year)],
+    year_end = max(Year),
+    end_val = `Life expectancy at birth, total (years)`[which.max(Year)],
+    total_increase = end_val - start_val,
+    duration = year_end - year_start,
+    annual_rate = ifelse(duration > 0, total_increase / duration, 0)
+  ) |>
+  arrange(desc(annual_rate)) |>
+  slice_max(annual_rate, n = 10)
+```
