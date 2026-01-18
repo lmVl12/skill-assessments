@@ -177,4 +177,14 @@ res_anova_t <- tidy(res_anova) |>
 # Show results
 res_anova_t
 ```
-
+To identify which specific continents differ from one another, a Tukey’s honest significance difference (HSD) test was performed as a post-hoc analysis following the ANOVA.
+```{r Tukey}
+# Tukey's honest significance test (table transformed)
+tukey_data <- TukeyHSD(res_anova) |>
+  tidy()
+tukey_table <- tukey_data |>
+  mutate(adj.p.value = formatC(adj.p.value, format = "e", digits = 2)) |>
+  kable(digits = 3, caption = "Tukey results")
+# Show results
+tukey_table
+```
