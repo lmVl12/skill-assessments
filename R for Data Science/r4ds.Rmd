@@ -154,3 +154,27 @@ plot_2 <- ggplot(
 # Make interactive
 ggplotly(plot_2, tooltip = "text")
 ```
+
+The visualization above shows the relationship for `r max_cor_year`. Note that the size of each circle reflects the country's population, though the size legend has been omitted for clarity.
+
+## Exploratory data analysis (EDA)
+
+### Continental disparities in energy consumption
+
+Question 1. What is the relationship between continent and Energy use (kg of oil equivalent per capita)?
+
+As the independent variable (continent) is categorical, the analysis focuses on identifying significant differences between groups. The dependent variable is quantitative (energy use), and the number of groups exceeds two. Given that we are comparing a single dependent variable across these categories, a one-way ANOVA is the most appropriate statistical test. 
+```{r ANOVA}
+# ANOVA test
+res_anova <- aov(`Energy use (kg of oil equivalent per capita)` ~ continent, data = original_data)
+# Transforming to table
+res_anova_t <- tidy(res_anova) |>
+  mutate(
+    statistic = ifelse(is.na(statistic), "", round(statistic, 2)), # Hide NA
+    p.value = ifelse(is.na(p.value), "", formatC(p.value, format = "e", digits = 2))
+  ) |>
+  kable(digits = 3, caption = "ANOVA results")
+# Show results
+res_anova_t
+```
+
