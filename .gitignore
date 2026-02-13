@@ -4,3 +4,4 @@
 *.Zone.Identifier
 .DS_Store
 *Zone.Identifier
+.venv/
