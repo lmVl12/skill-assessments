@@ -6,13 +6,14 @@ logging.basicConfig(format='%(levelname)s: %(message)s')
 logger = logging.getLogger()
 
 def print_board(board):
+    """Prints the game board in a readable format"""
     print("\n" + "-" * 13)
     for row in board:
         print(f"| {row[0]} | {row[1]} | {row[2]} |")
         print("-" * 13)
 
 def check_winner(board):
-    # All possible winning combinations
+    """Checks all combinations for a winner"""
     win_coords = [
         [(0,0), (0,1), (0,2)], [(1,0), (1,1), (1,2)], [(2,0), (2,1), (2,2)], # Rows
         [(0,0), (1,0), (2,0)], [(0,1), (1,1), (2,1)], [(0,2), (1,2), (2,2)], # Columns
@@ -24,40 +25,78 @@ def check_winner(board):
             return symbols[0]
     return None
 
+def simulate_move_and_check(board, move, sym):
+    """Temporary check: what happens if a symbol is placed in this cell"""
+    idx = int(move) - 1
+    r, c = idx // 3, idx % 3
+    original = board[r][c]
+    board[r][c] = sym
+    is_win = (check_winner(board) == sym)
+    board[r][c] = original # Revert changes
+    return is_win
+
+def get_computer_move(board, comp_sym, user_sym):
+    """Computer logic: 70% IQ (sees win/threat), 30% random"""
+    available_moves = [item for row in board for item in row if item not in ["X", "O"]]
+    
+    # "Human-like" error (30% probability of a random move)
+    if random.random() > 0.7:
+        return random.choice(available_moves)
+
+    # 1. Try to win immediately
+    for move in available_moves:
+        if simulate_move_and_check(board, move, comp_sym):
+            return move
+            
+    # 2. Block the player
+    for move in available_moves:
+        if simulate_move_and_check(board, move, user_sym):
+            return move
+            
+    # 3. Strategic center
+    if "5" in available_moves:
+        return "5"
+        
+    # 4. Random choice from remaining moves
+    return random.choice(available_moves)
+
 def main():
     board = [["1", "2", "3"], ["4", "5", "6"], ["7", "8", "9"]]
     
-    # 1. Symbol selection with validation
+    print("Welcome to Tic-Tac-Toe!")
+    
+    # Symbol selection
     user_sym = ""
     while user_sym not in ["X", "O"]:
-        user_sym = input("Choose your symbol (X or O): ").upper()
+        user_sym = input("Do you want to play as X or O?: ").upper()
         if user_sym not in ["X", "O"]:
             logger.warning("Invalid choice! Please enter only X or O.")
 
     comp_sym = "O" if user_sym == "X" else "X"
-    current_turn = "X"  # X always goes first by the rules
+    current_turn = "X" # By the rules, X always goes first
     
-    print(f"\nGame started! You: {user_sym}, Computer: {comp_sym}")
+    print(f"\nYou are playing as {user_sym}, computer is {comp_sym}.")
     print("X moves first.")
 
     while True:
         print_board(board)
         
-        # Check for winner or draw
+        # Check game end
         winner = check_winner(board)
         available_moves = [item for row in board for item in row if item not in ["X", "O"]]
         
         if winner:
-            print(f"Game over! {winner} wins!")
+            print(f"GAME OVER! Winner: {winner}")
             break
         if not available_moves:
-            print("Game over! It's a draw!")
+            print("GAME OVER! It's a draw!")
             break
 
-        # 2. Turn logic
+        # Player or Computer turn
         if current_turn == user_sym:
-            # Human turn
-            move = input(f"Your turn ({user_sym}), choose a cell number: ")
+            move = input(f"Your turn ({user_sym}), enter a number 1-9: ")
+            
+            # Move validation
             found = False
             for r in range(3):
                 for c in range(3):
@@ -66,20 +105,19 @@ def main():
                         found = True
             
             if not found:
-                logger.warning("This cell is occupied or doesn't exist. Try again.")
-                continue # Don't switch turns, let the human try again
+                logger.warning("This cell is unavailable. Choose another number from the board.")
+                continue # Don't switch turns until valid input is provided
         else:
             # Computer turn
-            comp_choice = random.choice(available_moves)
+            move = get_computer_move(board, comp_sym, user_sym)
             for r in range(3):
                 for c in range(3):
-                    if board[r][c] == comp_choice:
+                    if board[r][c] == move:
                         board[r][c] = comp_sym
-            print(f"Computer ({comp_sym}) chose cell: {comp_choice}")
+            print(f"Computer ({comp_sym}) chose cell: {move}")
 
-        # Switch turns
+        # Switch turn
         current_turn = "O" if current_turn == "X" else "X"
 
 if __name__ == "__main__":
     main()
-
