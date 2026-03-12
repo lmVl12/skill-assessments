@@ -62,6 +62,30 @@ assay(rse)[1:5, 1:5]
 ```{r}
 all(assay(rse) == floor(assay(rse)))    # possible to inspect element or check via function
 ```
+### Principal Component Analysis
+
+```{r}
+dds <- DESeqDataSet(rse, design = ~ condition)
+keep <- rowSums(counts(dds)) >= 10
+dds <- dds[keep,]
+```
+
+```{r}
+vsd <- vst(dds, blind = FALSE)
+```
+
+```{r}
+pcaData <- plotPCA(vsd, intgroup = "condition", returnData = TRUE)
+percentVar <- round(100 * attr(pcaData, "percentVar"))
+
+ggplot(pcaData, aes(x = PC1, y = PC2, color = condition, label = name)) +
+  geom_point(size = 3) + 
+  xlab(paste0("PC1 - ", percentVar[1], "%")) +
+  ylab(paste0("PC2 - ", percentVar[2], "%")) +
+  theme_classic() + 
+  ggtitle("Ewing Sarcoma PCA")
+```
+Principal Component Analysis (PCA) of the variance-stabilized counts shows a clear separation between control (shCTR) and knockdown (shEF1) samples along the first principal component (PC1). PC1 and PC2 together account for 99% of the total variance, confirming that the experimental condition is the primary driver of transcriptional changes. Notably, the knockdown group exhibits a secondary split along PC2, dividing the four replicates into two distinct sub-groups.
 
 
 
