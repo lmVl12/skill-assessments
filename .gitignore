@@ -5,3 +5,4 @@
 .DS_Store
 *Zone.Identifier
 Machine Learning/submission.csv
+.venv/
