@@ -31,6 +31,11 @@ library(dplyr)
 library(ggplot2)
 library(pheatmap)
 library(kableExtra)
+library(apeglm)
+library(msigdbr)
+library(ggpubr)
+library(clusterProfiler)
+library(enrichplot)
 ```
 
 Data import and EDA
@@ -99,13 +104,13 @@ res <- results(dds, contrast = c("condition", "shEF1", "shCTR"))
 ```
 
 ```{r}
-resNorm <- lfcShrink(dds = dds, res = res, type = "normal", coef = 2)
+resNorm <- lfcShrink(dds = dds, res = res, type = "apeglm", coef = 2)
 ```
 
 ```{r}
 plotMA(resNorm)
 ```
-The MA-plot illustrates the relationship between the mean of normalized counts and the log2 fold change.Differentially expressed genes (colored in blue) are distributed across the entire range of expression levels, with a significant concentration of high-confidence candidates (indicated by triangles), exceeding a log2 fold change of ±4.The assymetry also suggests the predominant upregulation of genes.
+The MA-plot illustrates the relationship between the mean of normalized counts and the log2 fold change. Differentially expressed genes (colored in blue) are distributed across the entire range of expression levels, with a significant concentration of high-confidence candidates (indicated by triangles), exceeding a log2 fold change of ±10.The assymetry also suggests the predominant upregulation of genes.
 
 ## DEGs Table
 ```{r}
@@ -159,5 +164,65 @@ pheatmap(mat_top,
          cellwidth = 30, 
          cellheight = 15)
 ```
+## GSEA
 
+```{r ORA and enrichment}
+resdf2 <- resdf |> 
+  arrange(padj) |> 
+  mutate(gsea_metric = -log10(padj) * sign(log2FoldChange))
 
+# Deal with inf
+resdf2 <- resdf2 |> 
+  mutate(padj = case_when(padj == 0 ~ .Machine$double.xmin,
+                          TRUE ~ padj)) |> 
+  mutate(gsea_metric = -log10(padj) * sign(log2FoldChange))
+
+# Remove NAs and order by GSEA
+resdf2 <- resdf2 |> 
+  dplyr::filter(! is.na(gsea_metric)) |> 
+  arrange(desc(gsea_metric))
+
+# GSEA value histogram
+hist(resdf2$gsea_metric, breaks = 100)
+```
+```{r GSEA }
+# Get the ranked GSEA vector
+ranks <- resdf2 |> 
+  dplyr::select(SYMBOL, gsea_metric) |> 
+  distinct(SYMBOL, .keep_all = TRUE) |> 
+  deframe()
+
+# Run GSEA
+gene_sets <- msigdbr(
+  species = "Homo sapiens", 
+  category = "C2", 
+  subcollection = "CP:KEGG_LEGACY"
+  ) |> 
+  dplyr::select(gs_name, gene_symbol)
+gseares <- GSEA(geneList = ranks, 
+                TERM2GENE = gene_sets,
+                pvalueCutoff = 1,
+                verbose = FALSE)
+gsearesdf <- as.data.frame(gseares)
+# Get the 'top' table
+gsearesdf|> 
+  arrange(desc(NES)) |> 
+  slice(c(1:5, (n()-4):n())) |> 
+  dplyr::select(ID, setSize, NES, p.adjust) 
+
+# Add description
+gsea_top_table$Direction <- ifelse(gsea_top_table$NES > 0, "Activated", "Suppressed")
+
+kable(gsea_top_table, 
+      row.names = FALSE,
+      caption = "Top enriched KEGG pathways by effect size (NES)",
+      col.names = c("Pathway ID", "Size", "NES", "Adj. P-value", "Knockdown effect"),
+      digits = c(0, 0, 2, 4, 0)) 
+
+```
+## Significantly enriched Biological Processes by gene ratio
+```{r GSEA dot plot}
+dotplot(gseares)
+```
+The DSEA analysis results indicate that FL1-knockdown resulted in suppression of genes related to DNA-replication, RNA degradation, spliceosome and ribosome, which is probably a good sign and protects the cell from out of control division. On the other hand the processes involved in homeostasis, signaling (Jak-STAT signaling pathway) or in differentiation, proliferation and signalling (ECM Receptor interaction, focal adhesion), or cellular stages (hematopoietic cell lineage) are activated. 
+Although the adjusted p-values for some pathways are relatively higher, their enrichment remains biologically consistent with the overall suppression of the oncogenic signature. The coordinated activation of cell adhesion and signaling pathways, coupled with the robust downregulation of the translational and replicative machinery clearly points toward the loss of the Ewing Sarcoma proliferative phenotype.
