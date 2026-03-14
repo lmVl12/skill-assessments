@@ -141,8 +141,23 @@ EnhancedVolcano(resdf, lab = resdf$SYMBOL, pCutoff = 1e-100,
                 FCcutoff = 3,
                 x = "log2FoldChange", y = "padj")
 ```
+## Top 10 over- and 10 underexpressed genes
 
+```{r, fig.height=7, fig.width=7}
+# plot heatmap of top 20 DE genes
+ordered_df <- resdf[order(resdf$log2FoldChange, decreasing = TRUE), ]
 
-
+# choose top10 underexpressed and top10 overexpressed
+top_20_degs <- rbind(head(ordered_df, 10), tail(ordered_df, 10))
+mat_top <- assay(vsd)[top_20_degs$GENEID, ]
+rownames(mat_top) <- top_20_degs$SYMBOL
+pheatmap(mat_top, 
+         scale = "row", 
+         clustering_distance_rows = "correlation",
+         annotation_col = as.data.frame(colData(vsd)[, "condition", drop = FALSE]),
+         main = "Top 10 Over- and Under-expressed DEGs",
+         cellwidth = 30, 
+         cellheight = 15)
+```
 
 
