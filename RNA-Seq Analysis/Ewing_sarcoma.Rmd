@@ -29,13 +29,14 @@ library(EnsDb.Hsapiens.v86)
 library(EnhancedVolcano)
 library(dplyr)
 library(ggplot2)
+library(ggplotify)
 library(pheatmap)
-library(kableExtra)
 library(apeglm)
 library(msigdbr)
 library(ggpubr)
 library(clusterProfiler)
 library(enrichplot)
+library(DT)
 ```
 
 Data import and EDA
@@ -113,32 +114,24 @@ plotMA(resNorm)
 The MA-plot illustrates the relationship between the mean of normalized counts and the log2 fold change. Differentially expressed genes (colored in blue) are distributed across the entire range of expression levels, with a significant concentration of high-confidence candidates (indicated by triangles), exceeding a log2 fold change of ±10.The assymetry also suggests the predominant upregulation of genes.
 
 ## DEGs Table
-```{r}
+```{r top DEGs}
 resdf <- as.data.frame(resNorm)
-```
-
-```{r annotation}
-ens2sym <- AnnotationDbi::select(EnsDb.Hsapiens.v86, keys = keys(EnsDb.Hsapiens.v86),
+# Annotation
+ens2sym <- AnnotationDbi::select(EnsDb.Hsapiens.v86, 
+                                 keys = keys(EnsDb.Hsapiens.v86),
                                  columns = c("SYMBOL"))
-View(ens2sym)
-```
-
-```{r}
 resdf <- resdf |> 
   rownames_to_column() |>  
   mutate(GENEID = gsub(rowname, pattern = "\\..+", replacement = "")) |> 
   dplyr::select(-rowname) |>  
   inner_join(y = ens2sym, by = "GENEID")
-View(resdf)
-```
 
-
-```{r}
+# Get the top 20 DEGs 
 top_degs <- resdf |> 
   arrange(padj) |>         
   head(20) |>              
   dplyr::select(SYMBOL, GENEID, baseMean, log2FoldChange, padj) 
-kable(top_degs, caption = "Top 20 Differentially Expressed Genes")
+datatable(top_degs, caption = "Top 20 Differentially Expressed Genes")
 ```
 
 ```{r}
@@ -149,10 +142,10 @@ EnhancedVolcano(resdf, lab = resdf$SYMBOL, pCutoff = 1e-100,
 ## Top 10 over- and 10 underexpressed genes
 
 ```{r, fig.height=7, fig.width=7}
-# plot heatmap of top 20 DE genes
+# plot heatmap of top 20 DE genes but include over- and underexpressed
 ordered_df <- resdf[order(resdf$log2FoldChange, decreasing = TRUE), ]
 
-# choose top10 underexpressed and top10 overexpressed
+# choose top10 overexpressed and top10 underexpressed
 top_20_degs <- rbind(head(ordered_df, 10), tail(ordered_df, 10))
 mat_top <- assay(vsd)[top_20_degs$GENEID, ]
 rownames(mat_top) <- top_20_degs$SYMBOL
@@ -213,11 +206,17 @@ gsearesdf|>
 # Add description
 gsea_top_table$Direction <- ifelse(gsea_top_table$NES > 0, "Activated", "Suppressed")
 
-kable(gsea_top_table, 
-      row.names = FALSE,
-      caption = "Top enriched KEGG pathways by effect size (NES)",
-      col.names = c("Pathway ID", "Size", "NES", "Adj. P-value", "Knockdown effect"),
-      digits = c(0, 0, 2, 4, 0)) 
+datatable(gsea_top_table, 
+          rownames = FALSE, 
+          caption = "Top enriched KEGG pathways by effect size (NES)",
+          colnames = c("Pathway ID", "Size", "NES", "Adj. P-value", "Knockdown effect"),
+          options = list(
+            pageLength = 10,          
+            autoWidth = TRUE,
+            columnDefs = list(list(className = 'dt-left', targets = "_all")) # Центрування
+          )) |> 
+  formatRound(columns = c('NES'), digits = 2) |> 
+  formatRound(columns = c('p.adjust'), digits = 4)
 
 ```
 ## Significantly enriched Biological Processes by gene ratio
@@ -226,3 +225,72 @@ dotplot(gseares)
 ```
 The DSEA analysis results indicate that FL1-knockdown resulted in suppression of genes related to DNA-replication, RNA degradation, spliceosome and ribosome, which is probably a good sign and protects the cell from out of control division. On the other hand the processes involved in homeostasis, signaling (Jak-STAT signaling pathway) or in differentiation, proliferation and signalling (ECM Receptor interaction, focal adhesion), or cellular stages (hematopoietic cell lineage) are activated. 
 Although the adjusted p-values for some pathways are relatively higher, their enrichment remains biologically consistent with the overall suppression of the oncogenic signature. The coordinated activation of cell adhesion and signaling pathways, coupled with the robust downregulation of the translational and replicative machinery clearly points toward the loss of the Ewing Sarcoma proliferative phenotype.
+
+
+```{r}
+# Get top 4 over-expressed pathways
+top_pathways <- gsearesdf |> 
+  top_n(n = 4, wt = NES) |> 
+  pull(ID)
+# Make gseaplot for each and return as list
+top_pathway_plots <- lapply(top_pathways, function(pathway) {
+  p1 <- gseaplot2(gseares, geneSetID = pathway, title = pathway, subplots = 1:3)
+  as.ggplot(p1)
+})
+
+# Arrange as a multi-panel plot
+top_pathway_plot <- ggarrange(plotlist = top_pathway_plots,
+                              ncol = 2, nrow = 2, labels = "AUTO")
+top_pathway_plot
+```
+
+
+```{r}
+# Get top 4 under-expressed pathways
+bottom_pathways <- gsearesdf |> 
+  top_n(n = 4, wt = -NES) |> 
+  pull(ID)
+bottom_pathway_plots <- lapply(
+  bottom_pathways, 
+  function(pathway) {
+    p2 <- gseaplot2(
+      gseares, 
+      geneSetID = pathway, 
+      title = pathway, 
+      subplots = 1:3)
+    as.ggplot(p2)
+    }
+  )
+
+bottom_pathway_plot <- ggarrange(plotlist = bottom_pathway_plots,
+                                 ncol = 2, nrow = 2, 
+                                 labels = "AUTO")
+bottom_pathway_plot
+
+```
+
+The GSEA results demonstrate a robust enrichment of activated pathways, while suppressed pathways (e.g., Ribosome, DNA Replication) exhibit a dominant trend of downregulation despite small subsets of atypical upregulated genes. These outliers typically fall into two categories: low-LFC metabolic genes with minimal impact on the overall enrichment score, or high-LFC stress-response proteins, such as the HSP70 family, indicating a robust cellular response to EwS-FLI1 depletion.A notable exception is POLD4, which is significantly upregulated  within the otherwise suppressed DNA Replication pathway. Since POLD4 is frequently downregulated in malignant phenotypes to facilitate genomic instability, its dramatic reactivation suggests that EwS-FLI1 knockdown may trigger a shift toward more stable, non-oncogenic DNA replication fidelity.
+
+```{r}
+# Give the names of atypical enriched patheays
+suppressed_pathways <- c("KEGG_RIBOSOME", "KEGG_DNA_REPLICATION", 
+                         "KEGG_RNA_DEGRADATION", "KEGG_SPLICEOSOME")
+
+# See the top of upregulated genes within those clasters
+all_outliers <- resdf2 |> 
+  filter(SYMBOL %in% (gene_sets |> 
+                        filter(gs_name %in% suppressed_pathways) |> 
+                        pull(gene_symbol))) |> 
+# Specify the pathway name
+  inner_join(gene_sets, by = c("SYMBOL" = "gene_symbol")) |> 
+  filter(gs_name %in% suppressed_pathways) |> 
+  group_by(gs_name) |> 
+  arrange(desc(gsea_metric)) |> 
+  slice_head(n = 10) |> 
+  select(gs_name, SYMBOL, log2FoldChange, padj, gsea_metric)
+
+datatable(all_outliers, 
+      caption = "Top upregulated genes enriched within suppressed KEGG pathways ",
+)
+```
+
