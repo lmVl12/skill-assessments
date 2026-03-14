@@ -30,6 +30,7 @@ library(EnhancedVolcano)
 library(dplyr)
 library(ggplot2)
 library(pheatmap)
+library(kableExtra)
 ```
 
 Data import and EDA
@@ -87,13 +88,59 @@ ggplot(pcaData, aes(x = PC1, y = PC2, color = condition, label = name)) +
 ```
 Principal Component Analysis (PCA) of the variance-stabilized counts shows a clear separation between control (shCTR) and knockdown (shEF1) samples along the first principal component (PC1). PC1 and PC2 together account for 99% of the total variance, confirming that the experimental condition is the primary driver of transcriptional changes. Notably, the knockdown group exhibits a secondary split along PC2, dividing the four replicates into two distinct sub-groups.
 
+## MA Plot
+
+```{r}
+dds <- DESeq(dds)
+```
+
+```{r}
+res <- results(dds, contrast = c("condition", "shEF1", "shCTR"))
+```
+
+```{r}
+resNorm <- lfcShrink(dds = dds, res = res, type = "normal", coef = 2)
+```
+
+```{r}
+plotMA(resNorm)
+```
+The MA-plot illustrates the relationship between the mean of normalized counts and the log2 fold change.Differentially expressed genes (colored in blue) are distributed across the entire range of expression levels, with a significant concentration of high-confidence candidates (indicated by triangles), exceeding a log2 fold change of ±4.The assymetry also suggests the predominant upregulation of genes.
+
+## DEGs Table
+```{r}
+resdf <- as.data.frame(resNorm)
+```
+
+```{r annotation}
+ens2sym <- AnnotationDbi::select(EnsDb.Hsapiens.v86, keys = keys(EnsDb.Hsapiens.v86),
+                                 columns = c("SYMBOL"))
+View(ens2sym)
+```
+
+```{r}
+resdf <- resdf |> 
+  rownames_to_column() |>  
+  mutate(GENEID = gsub(rowname, pattern = "\\..+", replacement = "")) |> 
+  dplyr::select(-rowname) |>  
+  inner_join(y = ens2sym, by = "GENEID")
+View(resdf)
+```
 
 
+```{r}
+top_degs <- resdf |> 
+  arrange(padj) |>         
+  head(20) |>              
+  dplyr::select(SYMBOL, GENEID, baseMean, log2FoldChange, padj) 
+kable(top_degs, caption = "Top 20 Differentially Expressed Genes")
+```
 
-
-
-
-
+```{r}
+EnhancedVolcano(resdf, lab = resdf$SYMBOL, pCutoff = 1e-100,
+                FCcutoff = 3,
+                x = "log2FoldChange", y = "padj")
+```
 
 
 
