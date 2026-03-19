@@ -15,12 +15,13 @@ date: "`r Sys.Date()`"
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(
-  message = FALSE,   
+  message = FALSE,
   warning = FALSE,
-  fig.width = 10,    
-  fig.height = 7,    
-  fig.align = "center", 
-  out.width = "100%")
+  fig.width = 10,
+  fig.height = 7,
+  fig.align = "center",
+  out.width = "100%"
+)
 ```
 
 
@@ -83,16 +84,16 @@ library(DT)
 
 rse <- readRDS("EwS.rds")
 cd <- as.data.frame(colData(rse))
-colData(rse) <- colData(rse)[, c("sample", "run", "condition")]    # select data for analysis
-rse$condition <- factor(rse$condition)                             # change raw text to factor format
-rse$condition <- relevel(rse$condition, ref = "shCTR")             # assign the control factor explicitly
-all(rownames(colData(rse)) == colnames(assay(rse)))                # check if the metadata match count matrix
-assay(rse)[1:5, 1:5]                                               # check the genes designation
+colData(rse) <- colData(rse)[, c("sample", "run", "condition")] # select data for analysis
+rse$condition <- factor(rse$condition) # change raw text to factor format
+rse$condition <- relevel(rse$condition, ref = "shCTR") # assign the control factor explicitly
+all(rownames(colData(rse)) == colnames(assay(rse))) # check if the metadata match count matrix
+assay(rse)[1:5, 1:5] # check the genes designation
 
 # make the gene names readable for annotation
-rownames(rse) <- gsub(pattern = "\\..+", replacement = "", x = rownames(rse)) 
+rownames(rse) <- gsub(pattern = "\\..+", replacement = "", x = rownames(rse))
 assay(rse)[1:5, 1:5]
-all(assay(rse) == floor(assay(rse)))                               # check if counts are integers
+all(assay(rse) == floor(assay(rse))) # check if counts are integers
 ```
 
 ### Setup and Data import 
@@ -113,9 +114,9 @@ Before proceeding with the differential analysis, the dataset was validated:
 
 ```{r normalization&PCA}
 # Normalization
-dds <- DESeqDataSet(rse, design = ~ condition)
+dds <- DESeqDataSet(rse, design = ~condition)
 keep <- rowSums(counts(dds)) >= 10
-dds <- dds[keep,]
+dds <- dds[keep, ]
 vsd <- vst(dds, blind = FALSE)
 
 # PCA
@@ -123,10 +124,10 @@ pcaData <- plotPCA(vsd, intgroup = "condition", returnData = TRUE)
 percentVar <- round(100 * attr(pcaData, "percentVar"))
 
 ggplot(pcaData, aes(x = PC1, y = PC2, color = condition, label = name)) +
-  geom_point(size = 5) + 
+  geom_point(size = 5) +
   xlab(paste0("PC1 - ", percentVar[1], "%")) +
   ylab(paste0("PC2 - ", percentVar[2], "%")) +
-  theme_classic(base_size = 18) + 
+  theme_classic(base_size = 18) +
   ggtitle("Ewing Sarcoma PCA") +
   theme(plot.title = element_text(size = 22, face = "bold"))
 ```
@@ -158,55 +159,59 @@ The primary objective of this analysis was to identify specific genes whose expr
 #### Top 20 Significant DEGs
 
 ```{r top DEGs}
-# Global settings 
+# Global settings
 p_adj_cut <- 0.01
-lfc_cut   <- 1
+lfc_cut <- 1
 base_mean_cut <- 20
 # Annotation
-ens2sym <- AnnotationDbi::select(EnsDb.Hsapiens.v86, 
-                                 keys = keys(EnsDb.Hsapiens.v86),
-                                 columns = c("SYMBOL"))
+ens2sym <- AnnotationDbi::select(EnsDb.Hsapiens.v86,
+  keys = keys(EnsDb.Hsapiens.v86),
+  columns = c("SYMBOL")
+)
 
-resdf <- as.data.frame(resNorm)|> 
-  rownames_to_column() |>  
-  mutate(GENEID = gsub(rowname, pattern = "\\..+", replacement = "")) |> 
-  dplyr::select(-rowname) |>  
+resdf <- as.data.frame(resNorm) |>
+  rownames_to_column() |>
+  mutate(GENEID = gsub(rowname, pattern = "\\..+", replacement = "")) |>
+  dplyr::select(-rowname) |>
   inner_join(y = ens2sym, by = "GENEID")
 
 # Сreate significant genes list
-sig_res <- resdf |> 
+sig_res <- resdf |>
   filter(padj < p_adj_cut & abs(log2FoldChange) >= lfc_cut & baseMean >= base_mean_cut)
 
 
-# Get the top 20 DEGs 
-top_20_degs <- sig_res |> 
-  arrange(padj) |>         
-  head(20) |>              
-  dplyr::select(SYMBOL, GENEID, baseMean, log2FoldChange, padj) 
+# Get the top 20 DEGs
+top_20_degs <- sig_res |>
+  arrange(padj) |>
+  head(20) |>
+  dplyr::select(SYMBOL, GENEID, baseMean, log2FoldChange, padj)
 
 datatable(
-  top_20_degs, 
+  top_20_degs,
   caption = "Top 20 Differentially Expressed Genes",
   options = list(
-            pageLength = 10,     
-            autoWidth = TRUE,
-            scrollX = TRUE)
+    pageLength = 10,
+    autoWidth = TRUE,
+    scrollX = TRUE
+  )
 )
 ```
 
 #### Volcano plot
 
 ```{r volcano plot}
-EnhancedVolcano(resdf, lab = resdf$SYMBOL,
-                x = "log2FoldChange", y = "padj",
-                pCutoff = 1e-100,
-                FCcutoff = 3,
-                border = "full", 
-                borderWidth = 1, 
-                borderColour = "black",
-                gridlines.major = FALSE, 
-                gridlines.minor = FALSE, 
-                title = "FL1 knockdown vs control")
+EnhancedVolcano(resdf,
+  lab = resdf$SYMBOL,
+  x = "log2FoldChange", y = "padj",
+  pCutoff = 1e-100,
+  FCcutoff = 3,
+  border = "full",
+  borderWidth = 1,
+  borderColour = "black",
+  gridlines.major = FALSE,
+  gridlines.minor = FALSE,
+  title = "FL1 knockdown vs control"
+)
 ```
 
 ### { - .unlisted}
@@ -230,14 +235,15 @@ top_20_hm_degs <- rbind(head(ordered_sig, 10), tail(ordered_sig, 10))
 mat_top <- assay(vsd)[top_20_hm_degs$GENEID, ]
 rownames(mat_top) <- top_20_hm_degs$SYMBOL
 
-pheatmap(mat_top, 
-         scale = "row", 
-         clustering_distance_rows = "correlation",
-         annotation_col = as.data.frame(colData(vsd)[, "condition", drop = FALSE]),
-         main = "Top 10 Over- and Under-expressed DEGs",
-         cellwidth = 30, 
-         cellheight = 15,
-         angle_col = "45")
+pheatmap(mat_top,
+  scale = "row",
+  clustering_distance_rows = "correlation",
+  annotation_col = as.data.frame(colData(vsd)[, "condition", drop = FALSE]),
+  main = "Top 10 Over- and Under-expressed DEGs",
+  cellwidth = 30,
+  cellheight = 15,
+  angle_col = "45"
+)
 ```
 
 
@@ -249,61 +255,65 @@ To perform this analysis, all detected genes were ranked by statistical signific
 #### by NES (table)
 
 ```{r GSEA }
-resdf2 <- resdf |> 
-  arrange(padj) |> 
+resdf2 <- resdf |>
+  arrange(padj) |>
   mutate(gsea_metric = -log10(padj) * sign(log2FoldChange))
 
 # Deal with inf
-resdf2 <- resdf2 |> 
-  mutate(padj = case_when(padj == 0 ~ .Machine$double.xmin,
-                          TRUE ~ padj)) |> 
+resdf2 <- resdf2 |>
+  mutate(padj = case_when(
+    padj == 0 ~ .Machine$double.xmin,
+    TRUE ~ padj
+  )) |>
   mutate(gsea_metric = -log10(padj) * sign(log2FoldChange))
 
 # Remove NAs and order by GSEA
-resdf2 <- resdf2 |> 
-  dplyr::filter(! is.na(gsea_metric)) |> 
+resdf2 <- resdf2 |>
+  dplyr::filter(!is.na(gsea_metric)) |>
   arrange(desc(gsea_metric))
 
 # Get the ranked GSEA vector
-ranks <- resdf2 |> 
-  dplyr::select(SYMBOL, gsea_metric) |> 
-  distinct(SYMBOL, .keep_all = TRUE) |> 
+ranks <- resdf2 |>
+  dplyr::select(SYMBOL, gsea_metric) |>
+  distinct(SYMBOL, .keep_all = TRUE) |>
   deframe()
 
 # Run GSEA
 gene_sets <- msigdbr(
-  species = "Homo sapiens", 
-  category = "C2", 
+  species = "Homo sapiens",
+  category = "C2",
   subcollection = "CP:KEGG_LEGACY"
-  ) |> 
+) |>
   dplyr::select(gs_name, gene_symbol)
-gseares <- GSEA(geneList = ranks, 
-                TERM2GENE = gene_sets,
-                pvalueCutoff = 1,
-                verbose = FALSE)
+gseares <- GSEA(
+  geneList = ranks,
+  TERM2GENE = gene_sets,
+  pvalueCutoff = 1,
+  verbose = FALSE
+)
 gsearesdf <- as.data.frame(gseares)
 # Get the 'top' table
-gsea_top_table <- gsearesdf|> 
-  arrange(desc(NES)) |> 
-  slice(c(1:5, (n()-4):n())) |> 
-  dplyr::select(ID, setSize, NES, p.adjust) 
+gsea_top_table <- gsearesdf |>
+  arrange(desc(NES)) |>
+  slice(c(1:5, (n() - 4):n())) |>
+  dplyr::select(ID, setSize, NES, p.adjust)
 
 # Add description
 gsea_top_table$Direction <- ifelse(gsea_top_table$NES > 0, "Activated", "Suppressed")
 
-datatable(gsea_top_table, 
-          rownames = FALSE, 
-          caption = "Top enriched KEGG pathways by effect size (NES)",
-          colnames = c("Pathway ID", "Size", "NES", "Adj. P-value", "Knockdown effect"),
-          options = list(
-            pageLength = 10,          
-            autoWidth = TRUE,
-            scrollX = TRUE,
-            columnDefs = list(list(className = 'dt-left', targets = "_all"))
-          )) |> 
-  formatRound(columns = c('NES'), digits = 2) |> 
-  formatRound(columns = c('p.adjust'), digits = 4)
-
+datatable(gsea_top_table,
+  rownames = FALSE,
+  caption = "Top enriched KEGG pathways by effect size (NES)",
+  colnames = c("Pathway ID", "Size", "NES", "Adj. P-value", "Knockdown effect"),
+  options = list(
+    pageLength = 10,
+    autoWidth = TRUE,
+    scrollX = TRUE,
+    columnDefs = list(list(className = "dt-left", targets = "_all"))
+  )
+) |>
+  formatRound(columns = c("NES"), digits = 2) |>
+  formatRound(columns = c("p.adjust"), digits = 4)
 ```
 
 #### by gene ratio (dotplot)
@@ -322,72 +332,81 @@ Although the adjusted p-values for some pathways are relatively higher, their en
 #### Activated pathways
 
 ```{r over-expressed pathways}
-top_pathways <- gsearesdf |> 
-  top_n(n = 2, wt = NES) |> 
+top_pathways <- gsearesdf |>
+  top_n(n = 2, wt = NES) |>
   pull(ID)
 # Make gseaplot for each and return as list
 top_pathway_plots <- lapply(
-  top_pathways, 
+  top_pathways,
   function(pathway) {
     p1 <- gseaplot2(
-      gseares, 
-      geneSetID = pathway, 
-      title = pathway, 
-      subplots = 1:3) 
-    as.ggplot(p1)})
+      gseares,
+      geneSetID = pathway,
+      title = pathway,
+      subplots = 1:3
+    )
+    as.ggplot(p1)
+  }
+)
 
 # Arrange as a multi-panel plot
-top_pathway_plot <- ggarrange(plotlist = top_pathway_plots,
-                              ncol = 2, nrow = 1, labels = "AUTO")
+top_pathway_plot <- ggarrange(
+  plotlist = top_pathway_plots,
+  ncol = 2, nrow = 1, labels = "AUTO"
+)
 top_pathway_plot
 ```
 
 #### Supressed pathways
 
 ```{r under-expressed pathways}
-bottom_pathways <- gsearesdf |> 
-  top_n(n = 2, wt = -NES) |> 
+bottom_pathways <- gsearesdf |>
+  top_n(n = 2, wt = -NES) |>
   pull(ID)
 bottom_pathway_plots <- lapply(
-  bottom_pathways, 
+  bottom_pathways,
   function(pathway) {
     p2 <- gseaplot2(
-      gseares, 
-      geneSetID = pathway, 
-      title = pathway, 
-      subplots = 1:3)
+      gseares,
+      geneSetID = pathway,
+      title = pathway,
+      subplots = 1:3
+    )
     as.ggplot(p2)
-    }
-  )
+  }
+)
 
-bottom_pathway_plot <- ggarrange(plotlist = bottom_pathway_plots,
-                                 ncol = 2, nrow = 1, 
-                                 labels = "AUTO")
+bottom_pathway_plot <- ggarrange(
+  plotlist = bottom_pathway_plots,
+  ncol = 2, nrow = 1,
+  labels = "AUTO"
+)
 bottom_pathway_plot
-
 ```
 
 #### Overexpressed genes in suppressed pathways
 
 ```{r atypical enriched pathways}
-suppressed_pathways <- c("KEGG_RIBOSOME", "KEGG_DNA_REPLICATION", 
-                         "KEGG_RNA_DEGRADATION", "KEGG_SPLICEOSOME")
+suppressed_pathways <- c(
+  "KEGG_RIBOSOME", "KEGG_DNA_REPLICATION",
+  "KEGG_RNA_DEGRADATION", "KEGG_SPLICEOSOME"
+)
 
 # See the top of upregulated genes within those clasters
-all_outliers <- resdf2 |> 
-  filter(SYMBOL %in% (gene_sets |> 
-                        filter(gs_name %in% suppressed_pathways) |> 
-                        pull(gene_symbol))) |> 
-# Specify the pathway name
-  inner_join(gene_sets, by = c("SYMBOL" = "gene_symbol")) |> 
-  filter(gs_name %in% suppressed_pathways) |> 
-  group_by(gs_name) |> 
-  arrange(desc(gsea_metric)) |> 
-  slice_head(n = 10) |> 
+all_outliers <- resdf2 |>
+  filter(SYMBOL %in% (gene_sets |>
+    filter(gs_name %in% suppressed_pathways) |>
+    pull(gene_symbol))) |>
+  # Specify the pathway name
+  inner_join(gene_sets, by = c("SYMBOL" = "gene_symbol")) |>
+  filter(gs_name %in% suppressed_pathways) |>
+  group_by(gs_name) |>
+  arrange(desc(gsea_metric)) |>
+  slice_head(n = 10) |>
   select(gs_name, SYMBOL, log2FoldChange, padj, gsea_metric)
 
-datatable(all_outliers, 
-      caption = "Top upregulated genes enriched within suppressed KEGG pathways ",
+datatable(all_outliers,
+  caption = "Top upregulated genes enriched within suppressed KEGG pathways ",
 )
 ```
 
