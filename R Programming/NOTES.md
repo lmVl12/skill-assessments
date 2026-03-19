@@ -11,3 +11,8 @@
 
 ## Architecture
 - **Code Structure**: The project follows a modular functional approach, separating the game engine (logic) from the UI (rendering the board and scores).
+
+## Launch
+- **How to run the script**: The game can be launched from the terminal using the command Rscript tic-tac-toe.R (ensuring the terminal is navigated to the correct directory via cd), or directly within RStudio by clicking the Source button.
+
+- **Important considerations**: Pay close attention to the working directory to ensure the file is accessible, and note that for WSL/Ubuntu environments, the file path must align with the Linux file system rather than the Windows UNC path.
