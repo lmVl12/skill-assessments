@@ -5,4 +5,5 @@
 .DS_Store
 *Zone.Identifier
 Machine Learning/submission.csv
+py4ds
 .venv/
