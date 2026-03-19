@@ -248,7 +248,7 @@ The visualization above shows the relationship for `r max_cor_year`. Note that t
 
 ### Continental disparities in energy consumption
 
-Question 1. What is the relationship between continent and Energy use (kg of oil equivalent per capita)?
+**Question 1. What is the relationship between continent and Energy use (kg of oil equivalent per capita)?**
 
 As the independent variable (continent) is categorical, the analysis focuses on identifying significant differences between groups. The dependent variable is quantitative (energy use), and the number of groups exceeds two. Given that we are comparing a single dependent variable across these categories, a one-way ANOVA is the most appropriate statistical test. 
 
@@ -335,7 +335,7 @@ original_data |>
 
 ### Comparative analysis of import reliance: Europe vs. Asia
 
-Question 2.Is there a significant difference between Europe and Asia with respect to 'Imports of goods and services (% of GDP)' in the years after 1990?
+**Question 2.Is there a significant difference between Europe and Asia with respect to 'Imports of goods and services (% of GDP)' in the years after 1990?**
 
 This is a classic statistical problem: comparing two groups to determine whether a significant difference exists between them. Our grouping (independent) variable is categorical with exactly two levels. The dependent variable is continuous (interval/ratio).
 
@@ -413,7 +413,7 @@ This boxplot confirms the initial hypothesis: Asia has a large number of extreme
 
 ### Population Density Champions
 
-Question 3. What is the country (or countries) that has the highest Population density (people per sq. km of land area) across all years? (i.e., which country has the highest average ranking in this category across each time point in the dataset?)
+**Question 3. What is the country (or countries) that has the highest Population density (people per sq. km of land area) across all years? (i.e., which country has the highest average ranking in this category across each time point in the dataset?)**
 
 ```{r population density leaderboard}
 pop_data <- original_data |>
@@ -445,7 +445,7 @@ Macao SAR, China and Monaco are the top-ranked territories, maintaining a peak a
 
 ### Half a century of progress: life expectancy gains
 
-Question 4. What country (or countries) has shown the greatest increase in 'Life expectancy at birth, total (years)' between 1962 and 2007?
+**Question 4. What country (or countries) has shown the greatest increase in 'Life expectancy at birth, total (years)' between 1962 and 2007?**
 
 ```{r Life expactancy leaderboard}
 life_data <- original_data |>
