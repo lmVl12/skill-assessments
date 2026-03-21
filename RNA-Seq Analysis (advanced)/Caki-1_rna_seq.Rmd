@@ -1,5 +1,86 @@
 ---
-title: "Caki-1 RNA-Seq"
-output: html_document
+title: "Caki-1 RNA Seq"
+self_contained: true
+output:
+  html_document:
+    theme: lumen        
+    highlight: tango     
+    toc: true            
+    toc_float: true
+    code_folding: hide 
+    number_sections: false     
+    df_print: paged   
 date: "`r Sys.Date()`"
 ---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  message = FALSE,
+  warning = FALSE,
+  fig.width = 10,
+  fig.height = 7,
+  fig.align = "center",
+  out.width = "100%"
+)
+```
+
+
+### Introduction
+
+
+```{r upload and inspect data, results='hide'}
+# Library imports
+library(tidyverse)
+library(DESeq2)
+library(EnsDb.Hsapiens.v86)
+library(EnhancedVolcano)
+library(dplyr)
+library(ggplot2)
+library(ggplotify)
+library(pheatmap)
+library(apeglm)
+library(msigdbr)
+library(ggpubr)
+library(clusterProfiler)
+library(enrichplot)
+library(DT)
+```
+
+
+```{r upload and inspect data, results='hide'}
+# Read and inspect the dataset
+load("rse_gene.Rdata")
+rse <- rse_gene
+colnames(colData(rse_gene))
+head(colData(rse)[, c("run", "title")])
+```
+
+```{r}
+mapping <- data.frame(
+  run = c("SRR2970559", 
+          "SRR2970560", 
+          "SRR2970562", 
+          "SRR2970566", 
+          "SRR2970569", 
+          "SRR2970570", 
+          "SRR2970573", 
+          "SRR2970575", 
+          "SRR2970578"),
+  cond = c(rep("Untreated", 3), rep("CoCl2", 3), rep("Hypoxia", 3))
+)
+rse$condition <- factor(rep(c("Untreated", "CoCl2", "Hypoxia"), each = 3), 
+                        levels = c("Untreated", "Hypoxia", "CoCl2"))
+as.data.frame(colData(rse)[, c("run", "condition")])
+```
+
+
+```{r upload and inspect data, results='hide'}
+assay(rse)[1:5, 1:5]    # check the genes designation
+# make the gene names readable for annotation
+rownames(rse) <- gsub(pattern = "\\..+", replacement = "", x = rownames(rse))
+assay(rse)[1:5, 1:5]
+all(assay(rse) == floor(assay(rse)))    # check if counts are integers
+all(rownames(colData(rse)) == colnames(assay(rse)))    # check if the metadata match count matrix
+colData(rse) <- colData(rse)[, c("sample", "run", "condition")] # select data for analysis
+rse$condition <- relevel(rse$condition, ref = "Untreated") # assign the control factor explicitly
+```
