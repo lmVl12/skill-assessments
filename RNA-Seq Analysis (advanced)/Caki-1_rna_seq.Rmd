@@ -84,3 +84,29 @@ all(rownames(colData(rse)) == colnames(assay(rse)))    # check if the metadata m
 colData(rse) <- colData(rse)[, c("sample", "run", "condition")] # select data for analysis
 rse$condition <- relevel(rse$condition, ref = "Untreated") # assign the control factor explicitly
 ```
+
+### Setup and Data import 
+
+### QC and Normalization 
+
+#### PCA Plot
+
+```{r normalization&PCA}
+# Normalization
+dds <- DESeqDataSet(rse, design = ~condition)
+keep <- rowSums(counts(dds)) >= 10
+dds <- dds[keep, ]
+vsd <- vst(dds, blind = FALSE)
+
+# PCA
+pcaData <- plotPCA(vsd, intgroup = "condition", returnData = TRUE)
+percentVar <- round(100 * attr(pcaData, "percentVar"))
+
+ggplot(pcaData, aes(x = PC1, y = PC2, color = condition, label = name)) +
+  geom_point(size = 5) +
+  xlab(paste0("PC1 - ", percentVar[1], "%")) +
+  ylab(paste0("PC2 - ", percentVar[2], "%")) +
+  theme_classic(base_size = 18) +
+  ggtitle("Caki-1") +
+  theme(plot.title = element_text(size = 22, face = "bold"))
+```
