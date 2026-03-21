@@ -121,7 +121,10 @@ res_chemical_hypoxia <- results(dds, contrast = c("condition", "CoCl2", "Untreat
 resNorm_chemical_hypoxia <- lfcShrink(dds = dds, 
                      coef = "condition_CoCl2_vs_Untreated", 
                      type = "apeglm")
+```
 
+
+```{r DESeq and MA plot, fig.height=7, fig.width=10}
 par(mfrow = c(1, 2))
 common_ylim <- c(-2.5, 2.5)
 plotMA(resNorm_real_hypoxia, main = "Real Hypoxia", ylim = common_ylim)
@@ -254,7 +257,7 @@ pheatmap(mat_final,
          scale = "row",
          cluster_cols = FALSE, 
          annotation_col = as.data.frame(colData(vsd)[, "condition", drop = FALSE]),
-         main = "Top 10 Over- and 10 Under-expressed DEGs (by padj)",
+         main = "Top 10 Over- and 10 Under-expressed DEGs",
          cellwidth = 30,
          cellheight = 12
 )
@@ -262,12 +265,113 @@ pheatmap(mat_final,
 Heatmap reveals two primary gene blocks: a top cluster of genes downregulated in physical hypoxia and a bottom cluster of genes upregulated across both treatment groups.
 While CoCl2 effectively induces common hypoxia markers like HMOX1 and DDIT4, it fails to replicate the gene repression (blue areas) observed in the physical hypoxia samples. Stress-related genes (HSPA1A/B) show significantly higher expression levels (darker red) in the CoCl2 group compared to the physical hypoxia group.
 
+### GSEA: Significantly enriched pathways
+
+#### by NES (table)
+
+#### by gene ratio (dotplot)
+
+```{r GSEA dot plot}
+
+# Завантажуємо KEGG
+kegg_sets <- msigdbr(species = "Homo sapiens", category = "C2", subcategory = "CP:KEGG_LEGACY") |>
+  dplyr::select(gs_name, gene_symbol)
+
+# Ранжуємо гени за 'stat'
+ranks_real <- res_gsea_real |>
+  distinct(SYMBOL, .keep_all = TRUE) |>
+  arrange(desc(stat)) |>
+  dplyr::select(SYMBOL, stat) |>
+  deframe()
+
+ranks_chem <- res_gsea_chem |>
+  distinct(SYMBOL, .keep_all = TRUE) |>
+  arrange(desc(stat)) |>
+  dplyr::select(SYMBOL, stat) |>
+  deframe()
+
+# Запускаємо GSEA
+gsea_real <- GSEA(ranks_real, TERM2GENE = kegg_sets, pvalueCutoff = 1, verbose = FALSE)
+gsea_chem <- GSEA(ranks_chem, TERM2GENE = kegg_sets, pvalueCutoff = 1, verbose = FALSE)
+
+# Топ-5 за padj
+gsea_real_df <- as.data.frame(gsea_real) |> 
+  arrange(p.adjust) |> 
+  head(5)
+
+gsea_chem_df <- as.data.frame(gsea_chem) |> 
+  arrange(p.adjust) |> 
+  head(5)
+
+gsea_real_df
+gsea_chem_df
+```
+
+```{r, fig.height = 10, fig.width = 17}
+# Малюємо графіки
+dotplot(gsea_real, showCategory = 5) + ggtitle("Top 5 KEGG Pathways: Real Hypoxia")+
+dotplot(gsea_chem, showCategory = 5) + ggtitle("Top 5 KEGG Pathways: CoCl2")
+```
+
+```{r}
+
+# Об'єднуємо результати для порівняння
+gsea_real_df <- as.data.frame(gsea_real) |> mutate(Condition = "Real Hypoxia")
+gsea_chem_df <- as.data.frame(gsea_chem) |> mutate(Condition = "CoCl2")
+
+# Вибираємо топ-5 шляхів для кожної умови за padj
+combined_res <- bind_rows(
+  gsea_real_df |> arrange(p.adjust) |> head(5),
+  gsea_chem_df |> arrange(p.adjust) |> head(5)
+)
+
+# Малюємо порівняльний dotplot
+ggplot(combined_res, aes(x = Condition, y = ID, size = setSize, color = NES)) +
+  geom_point() +
+  scale_color_gradient2(low = "blue", high = "red", mid = "white") +
+  theme_minimal() +
+  labs(title = "Comparison of Enriched KEGG Pathways",
+       y = "Pathway", x = "Condition")
+```
 
 
+While broad categories such as 'Pathways in Cancer' and various neurodegenerative disease signatures (e.g., Alzheimer's) showed high statistical significance, they were not prioritized for detailed analysis. Their enrichment is likely attributed to extensive gene overlap with core mitochondrial respiration and general survival signaling. Instead, the focus was directed toward more granular metabolic and stress-response pathways, which provide a clearer distinction between the physiological hypoxia and chemical stress phenotypes.
 
 
+```{r}
+# Real Hypoxia
+p1_a <- gseaplot2(gsea_real, geneSetID = "KEGG_RIBOSOME", title = "Ribosome: Real Hypoxia", color = "#E41A1C")
+# CoCl2
+p1_b <- gseaplot2(gsea_chem, geneSetID = "KEGG_RIBOSOME", title = "Ribosome: CoCl2", color = "#377EB8")
 
+# Об'єднуємо їх у рядок (порівняння "пліч-о-пліч")
+panel_ribo <- ggarrange(as.ggplot(p1_a), as.ggplot(p1_b), ncol = 2)
 
+# Real Hypoxia (має бути чіткий пік вгору)
+p2_a <- gseaplot2(gsea_real, geneSetID = "KEGG_GLYCOLYSIS_GLUCONEOGENESIS", title = "Glycolysis: Real Hypoxia", color = "#E41A1C")
+# CoCl2 (тут крива може бути набагато слабшою)
+p2_b <- gseaplot2(gsea_chem, geneSetID = "KEGG_GLYCOLYSIS_GLUCONEOGENESIS", title = "Glycolysis: CoCl2", color = "#377EB8")
+
+panel_glyc <- ggarrange(as.ggplot(p2_a), as.ggplot(p2_b), ncol = 2)
+
+# Real Hypoxia
+p3_a <- gseaplot2(gsea_real, geneSetID = "KEGG_VALINE_LEUCINE_AND_ISOLEUCINE_DEGRADATION", title = "Amino Acids: Real Hypoxia", color = "#E41A1C")
+# CoCl2 (тут має бути сильний сигнал деградації)
+p3_b <- gseaplot2(gsea_chem, geneSetID = "KEGG_VALINE_LEUCINE_AND_ISOLEUCINE_DEGRADATION", title = "Amino Acids: CoCl2", color = "#377EB8")
+
+panel_amino <- ggarrange(as.ggplot(p3_a), as.ggplot(p3_b), ncol = 2)
+
+# Об'єднуємо всі три пари в один великий графік
+final_report_plot <- ggarrange(panel_ribo, panel_glyc, panel_amino, 
+                               nrow = 3, labels = c("A", "B", "C"))
+
+print(final_report_plot)
+```
+**Key Findings** 
+
+* Panel A: Both conditions exhibited a robust and nearly identical enrichment of the KEGG_RIBOSOME pathway. This indicates a shared cellular strategy to manage stress by modulating protein synthesis and translational machinery.
+* Panel B: A significant difference was observed in the KEGG_GLYCOLYSIS_GLUCONEOGENESIS pathway. While real hypoxia triggered a strong and coordinated activation of glycolytic genes , CoCl2 showed a markedly weaker and less organized response. This suggests that chemical induction fails to fully replicate the metabolic shift characteristic of true oxygen deprivation.
+* Panel C: CoCl2 treatment specifically induced alterations in the KEGG_VALINE_LEUCINE_AND_ISOLEUCINE_DEGRADATION pathway, which remained unaffected in real hypoxia. This enrichment likely reflects a secondary "chemical footprint" related to metal-induced toxicity rather than hypoxic signaling.
 
 
 
