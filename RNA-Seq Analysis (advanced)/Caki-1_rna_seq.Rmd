@@ -42,6 +42,7 @@ library(ggpubr)
 library(clusterProfiler)
 library(enrichplot)
 library(DT)
+library(patchwork)
 ```
 
 ```{r upload and inspect data, results='hide'}
@@ -81,8 +82,6 @@ colData(rse) <- colData(rse)[, c("sample", "run", "condition")] # select data fo
 rse$condition <- relevel(rse$condition, ref = "Untreated") # assign the control factor explicitly
 ```
 
-### Setup and Data import
-
 ### QC and Normalization
 
 #### PCA Plot
@@ -114,27 +113,112 @@ ggplot(pcaData, aes(x = PC1, y = PC2, color = condition, label = name)) +
 dds <- DESeq(dds)
 resultsNames(dds)
 res_real_hypoxia <- results(dds, contrast = c("condition", "Hypoxia", "Untreated"))
-resNorm <- lfcShrink(dds = dds, 
+resNorm_real_hypoxia <- lfcShrink(dds = dds, 
                      coef = "condition_Hypoxia_vs_Untreated", 
                      type = "apeglm")
 
 res_chemical_hypoxia <- results(dds, contrast = c("condition", "CoCl2", "Untreated"))
-resNorm2 <- lfcShrink(dds = dds, 
+resNorm_chemical_hypoxia <- lfcShrink(dds = dds, 
                      coef = "condition_CoCl2_vs_Untreated", 
                      type = "apeglm")
 
 par(mfrow = c(1, 2))
 common_ylim <- c(-2.5, 2.5)
-# Малюємо перший графік
-plotMA(resNorm, main = "Real Hypoxia", ylim = common_ylim)
-
-# Малюємо другий графік
-plotMA(resNorm2, main = "Chemical Hypoxia (CoCl2)", ylim = common_ylim)
-
-# Повертаємо налаштування до стандартних (1х1), щоб наступні графіки не зліпилися
+plotMA(resNorm_real_hypoxia, main = "Real Hypoxia", ylim = common_ylim)
+plotMA(resNorm_chemical_hypoxia, main = "Chemical Hypoxia (CoCl2)", ylim = common_ylim)
 par(mfrow = c(1, 1))
 ```
 The two plots are nearly identical with just a few exceptions: in CoCl2 treated samples the number of upregulated genes is even higher and they have higher LFC value, however it does not indicate that this treatment mimics the real hypoxia conditions.
+
+### Differentially expressed genes
+
+#### Volcano plot
+
+```{r volcano plot}
+# Global settings
+p_adj_cut <- 0.01
+lfc_cut <- 1
+base_mean_cut <- 20
+
+# Annotation
+ens2sym <- AnnotationDbi::select(EnsDb.Hsapiens.v86,
+  keys = keys(EnsDb.Hsapiens.v86),
+  columns = c("SYMBOL")
+)
+
+resdf_real_hypoxia <- as.data.frame(resNorm_real_hypoxia) |>
+  rownames_to_column() |>
+  mutate(GENEID = gsub(rowname, pattern = "\\..+", replacement = "")) |>
+  dplyr::select(-rowname) |>
+  inner_join(y = ens2sym, by = "GENEID")
+
+resdf_chemical_hypoxia <- as.data.frame(resNorm_chemical_hypoxia) |>
+  rownames_to_column() |>
+  mutate(GENEID = gsub(rowname, pattern = "\\..+", replacement = "")) |>
+  dplyr::select(-rowname) |>
+  inner_join(y = ens2sym, by = "GENEID")
+```
+
+
+```{r volcano plot}
+
+
+# Use legend and subtitle from only one plot
+# Real Hypoxia
+p1 <- EnhancedVolcano(resdf_real_hypoxia,
+  lab = resdf_real_hypoxia$SYMBOL,
+  x = "log2FoldChange", y = "padj",
+  pCutoff = p_adj_cut, FCcutoff = 2,
+  title = "Real Hypoxia",
+  subtitle = NULL, 
+  caption = NULL,  
+  gridlines.major = FALSE, gridlines.minor = FALSE,
+  border = "full",
+  legendPosition = "none" 
+)
+
+# Chemical Hypoxia
+p2 <- EnhancedVolcano(resdf_chemical_hypoxia,
+  lab = resdf_chemical_hypoxia$SYMBOL,
+  x = "log2FoldChange", y = "padj",
+  pCutoff = p_adj_cut, FCcutoff = 2,
+  title = "Chemical Hypoxia (CoCl2)",
+  subtitle = NULL,
+  gridlines.major = FALSE, gridlines.minor = FALSE,
+  border = "full"
+)
+
+# Join with one legend
+(p1 | p2) + 
+  plot_layout(guides = "collect") & 
+  theme(legend.position = "bottom")
+```
+It is now even more obvious that chemical and real hypoxia are not the same as the DEG names are different and the volcano profiles are also different, but still both effect gene expression levels.
+#### Top 20 Significant DEGs
+
+```{r}
+# find top DEGs for both conditions
+top_real_names <- sig_res_real |> arrange(padj) |> head(20) |> pull(SYMBOL)
+top_chem_names <- sig_res_chemical |> arrange(padj) |> head(20) |> pull(SYMBOL)
+
+# find common unique top DEGs
+all_top_genes <- unique(c(top_real_names, top_chem_names))
+
+# join the top genes into common table to compare
+comparison_table <- resdf_real_hypoxia |>
+  filter(SYMBOL %in% all_top_genes) |>
+  dplyr::select(SYMBOL, LFC_Real = log2FoldChange, padj_Real = padj) |>
+  inner_join(
+    resdf_chemical_hypoxia |> dplyr::select(SYMBOL, LFC_Chem = log2FoldChange, padj_Chem = padj),
+    by = "SYMBOL"
+  )
+
+# display one table
+datatable(comparison_table)
+```
+
+Table contains 37 genes, which means that these conditions only share 3 genes as top DEGs.
+The LFC for DEGs also differ.
 
 
 
