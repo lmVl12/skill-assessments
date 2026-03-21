@@ -160,8 +160,7 @@ resdf_chemical_hypoxia <- as.data.frame(resNorm_chemical_hypoxia) |>
 ```
 
 
-```{r volcano plot}
-
+```{r volcano plot, fig.height=7, fig.width=10}
 
 # Use legend and subtitle from only one plot
 # Real Hypoxia
@@ -197,6 +196,12 @@ It is now even more obvious that chemical and real hypoxia are not the same as t
 #### Top 20 Significant DEGs
 
 ```{r}
+sig_res_real <- resdf_real_hypoxia |>
+  filter(padj < p_adj_cut & abs(log2FoldChange) >= lfc_cut & baseMean >= base_mean_cut)
+
+sig_res_chemical <- resdf_chemical_hypoxia |>
+  filter(padj < p_adj_cut & abs(log2FoldChange) >= lfc_cut & baseMean >= base_mean_cut)
+
 # find top DEGs for both conditions
 top_real_names <- sig_res_real |> arrange(padj) |> head(20) |> pull(SYMBOL)
 top_chem_names <- sig_res_chemical |> arrange(padj) |> head(20) |> pull(SYMBOL)
@@ -220,6 +225,42 @@ datatable(comparison_table)
 Table contains 37 genes, which means that these conditions only share 3 genes as top DEGs.
 The LFC for DEGs also differ.
 
+```{r heatmap, fig.height=7, fig.width=7}
+# Choose the significant genes by major contrast (real hypoxia)
+sig_res <- resdf_real_hypoxia |> 
+  filter(padj < p_adj_cut & baseMean >= base_mean_cut)
+
+sig_ordered <- sig_res |> arrange(padj)
+# Selecting the top 10 over- and under-expressed DEGs prioritized by statistical significance 
+#(lowest padj) to ensure robust expression patterns across replicates.
+top_10_over <- sig_ordered |> 
+  filter(log2FoldChange > 0) |> 
+  head(10)
+
+top_10_under <- sig_ordered |> 
+  filter(log2FoldChange < 0) |> 
+  head(10)
+
+# Combine over- and underexpressed genes
+hm_genes_id <- c(top_10_over$GENEID, top_10_under$GENEID)
+hm_genes_symbols <- c(top_10_over$SYMBOL, top_10_under$SYMBOL)
+
+# Prepare the matrix
+mat_final <- assay(vsd)[hm_genes_id, ]
+rownames(mat_final) <- hm_genes_symbols
+
+
+pheatmap(mat_final,
+         scale = "row",
+         cluster_cols = FALSE, 
+         annotation_col = as.data.frame(colData(vsd)[, "condition", drop = FALSE]),
+         main = "Top 10 Over- and 10 Under-expressed DEGs (by padj)",
+         cellwidth = 30,
+         cellheight = 12
+)
+```
+Heatmap reveals two primary gene blocks: a top cluster of genes downregulated in physical hypoxia and a bottom cluster of genes upregulated across both treatment groups.
+While CoCl2 effectively induces common hypoxia markers like HMOX1 and DDIT4, it fails to replicate the gene repression (blue areas) observed in the physical hypoxia samples. Stress-related genes (HSPA1A/B) show significantly higher expression levels (darker red) in the CoCl2 group compared to the physical hypoxia group.
 
 
 
