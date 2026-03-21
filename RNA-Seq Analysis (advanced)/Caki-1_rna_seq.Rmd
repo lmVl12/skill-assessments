@@ -24,9 +24,7 @@ knitr::opts_chunk$set(
 )
 ```
 
-
 ### Introduction
-
 
 ```{r upload and inspect data, results='hide'}
 # Library imports
@@ -45,7 +43,6 @@ library(clusterProfiler)
 library(enrichplot)
 library(DT)
 ```
-
 
 ```{r upload and inspect data, results='hide'}
 # Read and inspect the dataset
@@ -73,7 +70,6 @@ rse$condition <- factor(rep(c("Untreated", "CoCl2", "Hypoxia"), each = 3),
 as.data.frame(colData(rse)[, c("run", "condition")])
 ```
 
-
 ```{r upload and inspect data, results='hide'}
 assay(rse)[1:5, 1:5]    # check the genes designation
 # make the gene names readable for annotation
@@ -85,9 +81,9 @@ colData(rse) <- colData(rse)[, c("sample", "run", "condition")] # select data fo
 rse$condition <- relevel(rse$condition, ref = "Untreated") # assign the control factor explicitly
 ```
 
-### Setup and Data import 
+### Setup and Data import
 
-### QC and Normalization 
+### QC and Normalization
 
 #### PCA Plot
 
@@ -110,3 +106,43 @@ ggplot(pcaData, aes(x = PC1, y = PC2, color = condition, label = name)) +
   ggtitle("Caki-1") +
   theme(plot.title = element_text(size = 22, face = "bold"))
 ```
+
+
+#### MA Plot
+
+```{r DESeq and MA plot}
+dds <- DESeq(dds)
+resultsNames(dds)
+res_real_hypoxia <- results(dds, contrast = c("condition", "Hypoxia", "Untreated"))
+resNorm <- lfcShrink(dds = dds, 
+                     coef = "condition_Hypoxia_vs_Untreated", 
+                     type = "apeglm")
+
+res_chemical_hypoxia <- results(dds, contrast = c("condition", "CoCl2", "Untreated"))
+resNorm2 <- lfcShrink(dds = dds, 
+                     coef = "condition_CoCl2_vs_Untreated", 
+                     type = "apeglm")
+
+par(mfrow = c(1, 2))
+common_ylim <- c(-2.5, 2.5)
+# Малюємо перший графік
+plotMA(resNorm, main = "Real Hypoxia", ylim = common_ylim)
+
+# Малюємо другий графік
+plotMA(resNorm2, main = "Chemical Hypoxia (CoCl2)", ylim = common_ylim)
+
+# Повертаємо налаштування до стандартних (1х1), щоб наступні графіки не зліпилися
+par(mfrow = c(1, 1))
+```
+The two plots are nearly identical with just a few exceptions: in CoCl2 treated samples the number of upregulated genes is even higher and they have higher LFC value, however it does not indicate that this treatment mimics the real hypoxia conditions.
+
+
+
+
+
+
+
+
+
+
+
