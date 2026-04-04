@@ -56,9 +56,46 @@ VlnPlot(melanoma_raw, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), 
 FeatureScatter(melanoma_raw, feature1 = "nCount_RNA", feature2 = "percent.mt")
 ```
 
+```{r}
+melanoma <- melanoma_raw |> 
+  subset(subset = nFeature_RNA > 500 & nFeature_RNA < 6000 & percent.mt < 10) |>  
+  NormalizeData() |> 
+  FindVariableFeatures(selection.method = "vst", nfeatures = 2000) |> 
+  ScaleData()
+
+# check the results
+melanoma |> 
+  FeatureScatter(feature1 = "nCount_RNA", feature2 = "percent.mt") +
+  theme_bw()
+```
+#### PCA
+```{r}
+melanoma <- RunPCA(melanoma)
+
+DimPlot(melanoma)
+
+# What are the genes that determine PC1 and PC2?
+VizDimLoadings(melanoma, dims = 1:2)
+```
 
 
+```{r}
+FeaturePlot(melanoma, features = c("S100A1", "CST3", "EDNRB"))
 
+FeaturePlot(melanoma, features = c("LYZ", "TYROBP"))
+
+# Select number of PCs
+ElbowPlot(melanoma, ndims = 50)
+```
+
+```{r}
+melanoma <- melanoma |> 
+  FindNeighbors(dims = 1:25) |> 
+  FindClusters(resolution = 0.5) |>  
+  RunUMAP(dims = 1:25)
+
+DimPlot(melanoma, reduction = "umap", label = TRUE) + NoLegend()
+```
 
 
 
