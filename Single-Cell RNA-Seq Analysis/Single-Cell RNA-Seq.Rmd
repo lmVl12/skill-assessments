@@ -5,25 +5,60 @@ date: "`r Sys.Date()`"
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE)
 ```
 
-## R Markdown
-
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
+```{r}
+library(Seurat)
+library(tidyverse)
+library(ggpubr)
+library(Matrix)
+library(ggplot2)
+library(patchwork)
+library(SingleR)
+library(celldex)
+library(SingleCellExperiment)
 ```
 
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r}
+if (!file.exists("melanoma_matrix.tar.gz")) {
+  download.file(
+    url = "https://cf.10xgenomics.com/samples/cell-exp/8.0.0/10k_Human_DTC_Melanoma_3p_nextgem_10k_Human_DTC_Melanoma_3p_nextgem/10k_Human_DTC_Melanoma_3p_nextgem_10k_Human_DTC_Melanoma_3p_nextgem_count_sample_filtered_feature_bc_matrix.tar.gz",
+    destfile = "melanoma_matrix.tar.gz",
+    method = "curl"
+  )
+}
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+```{r}
+if (!dir.exists("sample_filtered_feature_bc_matrix")) {
+  untar("melanoma_matrix.tar.gz")
+}
+list.dirs(recursive = FALSE)
+```
+
+```{r}
+mat <- Read10X(data.dir = "sample_filtered_feature_bc_matrix")
+melanoma_raw <- CreateSeuratObject(counts = mat, project = "Melanoma_10k")
+```
+
+```{r}
+View(mat)
+View(melanoma_raw)
+```
+
+```{r}
+melanoma_raw <- melanoma_raw |> 
+  PercentageFeatureSet(pattern = "^MT-", col.name = "percent.mt")
+
+VlnPlot(melanoma_raw, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+FeatureScatter(melanoma_raw, feature1 = "nCount_RNA", feature2 = "percent.mt")
+```
+
+
+
+
+
+
+

@@ -9,3 +9,5 @@ py4ds
 feat/py-prog
 rna-seq
 .venv/
+melanoma_matrix.tar.gz
+sample_filtered_feature_bc_matrix/
