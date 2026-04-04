@@ -87,6 +87,11 @@ FeaturePlot(melanoma, features = c("LYZ", "TYROBP"))
 # Select number of PCs
 ElbowPlot(melanoma, ndims = 50)
 ```
+NOTES: 
+1.Endothelin receptor B (ETRB or EDNRB) is overexpressed in most human melanomas and is proposed to provide a marker of melanoma progression.
+2. Overexpression of S100A1 is associated with melanoma, breast cancer, ovarian cancer, and endometrial carcinoma (similar to S100A1 expression profile).
+3. Factors upregulated CysC secretion by melanoma. Similarly, melanoma-derived factors upregulated CysC secretion by microglia.
+4. TYROBP is a prognostic marker in Skin cutaneous melanoma/ Cell type enhanced (Hofbauer cells, Kupffer cells, Neutrophils, monocytes, Macrophages, cDC, pDCs, NK-cells, Mast cells)
 
 ```{r}
 melanoma <- melanoma |> 
@@ -98,4 +103,163 @@ DimPlot(melanoma, reduction = "umap", label = TRUE) + NoLegend()
 ```
 
 
+## Marker annotation
+```{r}
+melanoma.markers <- FindAllMarkers(melanoma,
+                               only.pos = TRUE, 
+                               min.pct = 0.25, 
+                               logfc.threshold = 0.5)
+```
+Step 1. Prior knowledge markers
 
+```{r}
+top5_markers <- melanoma.markers |> 
+  group_by(cluster) |> 
+  slice_max(n = 5, order_by = avg_log2FC)
+
+View(top5_markers)
+# Look for "unique only/mostly" markers 
+for(i in unique(top5_markers$cluster)) {
+  genes_to_plot <- top5_markers %>% filter(cluster == i) |>  pull(gene)
+  
+  p <- FeaturePlot(melanoma, features = genes_to_plot, ncol = 3) + 
+    plot_annotation(title = paste("Top markers for Cluster", i))
+  
+  print(p)
+}
+
+```
+
+
+```{r}
+marker_list_melanoma <- list(
+  'Neurons/tumor' = c("SYN3", "NETO1"),
+  'T cells' = c("CD40LG"),
+  'CTLA' = c("BTNL9", "CD80"),
+  'Granulosa cells/pro-inflammatory' = c("ANKS1B", "ICA1", "TOX2"),
+  'NK' = c("NKG7"),
+  'Macrophages' = c("CD163"),
+  'Plasma cells' = c("IGHG3", "IGHGP"),
+  'Endothelial/melanocytes' = c("EDN3"))
+marker_vln <- function(srt, marker_list, group_name) {
+  genes <- marker_list[[group_name]]
+  vln <- VlnPlot(srt, features = genes, ncol = length(genes), pt.size = 0) +
+    patchwork::plot_annotation(title = group_name)
+  return(vln)
+}
+
+vlnList <- lapply(names(marker_list_melanoma), marker_vln, 
+                  srt = melanoma, marker_list = marker_list_melanoma)
+final_ga <- ggarrange(plotlist = vlnList, ncol = 1)
+
+ggsave(final_ga, filename = "melanoma_validation_violins.png", height = 25, width = 15)
+```
+
+Step 2. Semi-automated annotation
+
+```{r, fig.height=10}
+bped.se <- BlueprintEncodeData()
+sceP <- as.SingleCellExperiment(melanoma)
+pred.bped.main <- SingleR(test = sceP, 
+                          ref = bped.se, 
+                          labels = bped.se$label.main)
+plotScoreHeatmap(pred.bped.main,
+                 max.labels = 8,
+                 clusters = melanoma$seurat_clusters,
+                 order.by = "clusters",
+                 show_colnames = FALSE)
+```
+From this perspective it is quite clear that claster 11 contains melanocytes (tumor) and all other clasters are the immune microenvironment. To get a deeper understanding of what is going on in the immune microenvironment the MonacoImmuneData can be utilized.
+
+```{r, fig.height=15 }
+mimd.se <- MonacoImmuneData()
+
+sceP <- as.SingleCellExperiment(melanoma)
+pred.mimd.main <- SingleR(test = sceP, 
+                          ref = mimd.se, 
+                          labels = mimd.se$label.main)
+pred.mimd.fine <- SingleR(test = sceP, 
+                          ref = mimd.se, 
+                          labels = mimd.se$label.fine)
+plotScoreHeatmap(pred.mimd.main,
+                 max.labels = 20,
+                 clusters = melanoma$seurat_clusters,
+                 order.by = "clusters",
+                 show_colnames = FALSE)
+plotScoreHeatmap(pred.mimd.fine,
+                 max.labels = 20,
+                 clusters = melanoma$seurat_clusters,
+                 order.by = "clusters",
+                 show_colnames = FALSE)
+
+```
+Some of the "fine" labels seem to be robust, but some are not.
+
+
+```{r}
+### 1. Re-train SingleR (Optimizing for available genes)
+# This step ensures SingleR only uses genes present in your specific dataset
+my_genes <- rownames(sceP)
+
+trained_mimd_main <- trainSingleR(mimd.se, 
+                                  labels = mimd.se$label.main, 
+                                  test.genes = my_genes)
+
+trained_mimd_fine <- trainSingleR(mimd.se, 
+                                  labels = mimd.se$label.fine, 
+                                  test.genes = my_genes)
+
+# Combine Main and Fine level predictions for higher accuracy
+pred.comb <- combineRecomputedResults(
+  results = list(Main = pred.mimd.main, Fine = pred.mimd.fine),
+  test = sceP, 
+  trained = list(Main = trained_mimd_main, Fine = trained_mimd_fine),
+  assay.type.test = "logcounts"
+)
+
+### 2. Diagnostics & Confidence Assessment
+# Check which markers were used and assess assignment confidence
+metadata(pred.mimd.fine)$common.markers
+pred.mimd.fine$clusters <- melanoma$seurat_clusters
+
+# Visualizing score distribution (how clear the "winner" is for each cell)
+plotScoreDistribution(pred.mimd.fine)
+
+### 3. Final Integration & Validation
+# Map the high-confidence (pruned) labels back to the Seurat object
+melanoma$predicted_id <- pred.comb$pruned.labels
+
+# Final summary heatmap of combined results
+plotScoreHeatmap(pred.comb,
+                 max.labels = 20,
+                 clusters = melanoma$seurat_clusters,
+                 order.by = "clusters",
+                 show_colnames = FALSE,
+                 main = "Final Combined Annotation")
+
+# Cross-tabulation to compare Clusters vs. Predicted IDs
+table(melanoma$predicted_id, melanoma$seurat_clusters)
+
+```
+```{r}
+Idents(melanoma) <- melanoma$seurat_clusters
+new_ids <- c(
+  "0" = "Naive B cells",
+  "1" = "Naive CD4 T cells*",
+  "2" = "Non-switched memory B cells",
+  "3" = "Naive CD4 T cells*",
+  "4" = "Switched memory B cells",
+  "5" = "T regulatory cells",
+  "6" = "Naive B cells",
+  "7" = "Naive CD8 T cells",
+  "8" = "Vd2 gd T cells",
+  "9" = "Myeloid dendritic",
+  "10" = "B cells*",
+  "11" = "Melanocytes",
+  "12" = "Plasmacytoid dendritic"
+)
+melanoma <- RenameIdents(melanoma, new_ids)
+melanoma$cell_type <- Idents(melanoma)
+DimPlot(melanoma, label.size = 3, label = TRUE) + NoLegend() 
+```
+The T-cell, B-cell, and dendritic cell populations are clearly distinct, with the melanocyte cluster also forming a separate group. One specific B-cell cluster is particularly noteworthy as it is positioned away from the others; it expresses a set of exhausted B-cell markers absent in other clusters, potentially indicating a hidden communication axis with the melanoma. Fully identifying sub-populations remains challenging because this map captures a 'dynamic cell transformation' process. As markers gradually appear and disappear, a 'pseudotime' or trajectory analysis is required to resolve these transitions.
