@@ -23,7 +23,8 @@ library(SingleCellExperiment)
 library(enrichR)
 library(clusterProfiler)
 library(Seurat)
-
+library(monocle3)
+library(SeuratWrappers)
 reticulate::py_require(c("magic-impute", "phate"))
 reticulate::py_config()
 if (!reticulate::py_module_available("phate") |
@@ -335,5 +336,110 @@ p2 <- DimPlot(melanoma, reduction = "phate_magic", group.by = "cell_type", cols 
 p1 + p2
 
 ```
+
+Pseudotime
+
+
+```{r}
+cds <- as.cell_data_set(melanoma)
+cds <- cluster_cells(cds, reduction_method = "UMAP")
+cds <- learn_graph(cds, use_partition = TRUE)
+
+get_roots_per_partition <- function(cds) {
+  parts <- unique(partitions(cds))
+  root_cells <- c()
+  
+  for (p in parts) {
+    cell_id <- which(partitions(cds) == p)[1]
+    root_cells <- c(root_cells, names(cell_id))
+  }
+  return(root_cells)
+}
+
+cds <- order_cells(cds, 
+                   reduction_method = "UMAP", 
+                   root_cells = get_roots_per_partition(cds))
+
+colData(cds)$cell_type <- melanoma$cell_type
+
+p1 <- plot_cells(cds, 
+                 color_cells_by = "cell_type", 
+                 label_cell_groups = FALSE,
+                 label_leaves = FALSE, 
+                 graph_label_size = 0) + 
+  theme_minimal()
+
+p2 <- plot_cells(cds, 
+                 color_cells_by = "pseudotime", 
+                 label_cell_groups = FALSE,
+                 label_leaves = FALSE, 
+                 graph_label_size = 0) + 
+  theme_minimal()
+
+p1 + p2
+```
+
+Metabolism 
+
+```{r}
+to_check <- c("Human_Gene_Atlas", "ENCODE_and_ChEA_Consensus_TFs_from_ChIP-X", 
+              "KEGG_2019_Human", "MSigDB_Hallmark_2020")
+
+pdf("All_Clusters_Enrichr_Report.pdf", width = 16, height = 10)
+for (target_cluster in sort(unique(sig_markers$cluster))) {
+  
+  message(paste("Processing cluster:", target_cluster))
+
+  cl_genes <- sig_markers |>  
+    filter(cluster == target_cluster) |>  
+    pull(gene)
+
+  if(length(cl_genes) == 0) next
+
+  cl_eres <- enrichr(cl_genes, databases = to_check)
+  
+  plotList <- lapply(names(cl_eres), function(db) {
+    df <- cl_eres[[db]]
+    if (is.null(df) || nrow(df) == 0) return(NULL)
+    
+    df |> 
+      top_n(10, wt = -log10(Adjusted.P.value)) |> 
+      mutate(Term = stringr::str_trunc(Term, 45)) |>  
+      mutate(Term = factor(Term, levels = rev(unique(Term)))) |> 
+      ggplot(aes(x = Term, y = -log10(Adjusted.P.value), fill = Combined.Score)) +
+      geom_col() +
+      coord_flip() +
+      theme_minimal(base_size = 12) +
+      labs(title = db, x = "") +
+      scale_fill_gradient(low = "skyblue", high = "darkblue")
+  })
+  
+  plotList <- Filter(Negate(is.null), plotList)
+  combined_plot <- cowplot::plot_grid(plotlist = plotList, labels = "AUTO", ncol = 2) +
+    patchwork::plot_annotation(
+      title = paste("Cluster", target_cluster, "Enrichr Analysis"),
+      theme = theme(plot.title = element_text(size = 20, face = "bold", hjust = 0.5))
+    )
+  print(combined_plot)
+}
+
+dev.off()
+```
+
+Key Findings:
+
+Cluster 1 vs 3. Although both clusters are CD4+ T-cells and look similar on the surface, they are separated by their activation level and biological "mission": cluster 1 cells are in a state of acute inflammation. A very strong TNF-alpha signaling score (over 20 on the -log_10P scale). Cluster 3 cells are also in the tumor area, but they are receiving "calming" or regulatory signals: the TNF-alpha signal is weaker (around 15), and unique pathways like IL-6/STAT3 and IL-2/STAT5 appear.
+
+Cluster 6 (Ambiguous B cells): Likely some B-T cell doublets. It lacks a strong B-cell metabolic signature and sits "physically" between B and T islands on the UMAP, suggesting a mixed transcriptional signal.
+
+Cluster 10 (Plasma B cells): A distinct functional lineage. The extreme shift on the UMAP is driven by a metabolic explosion: massive Proteasome activity and Oxidative Phosphorylation required for high-intensity antibody production.
+
+Cluster 8 represents a specialized population of Vd2 gd T-cells and memory CD8+ T-cells that exhibit a hybrid NK-like transcriptional profile and a high readiness for rapid anti-tumor response, as evidenced by the strong enrichment of T-cell receptor signaling and TNF-alpha inflammatory pathways.
+
+Summary: The clustering is driven by functional shifts (exhaustion, inflammation, and protein secretion) rather than just cell lineage.
+
+
+
+
 
 
