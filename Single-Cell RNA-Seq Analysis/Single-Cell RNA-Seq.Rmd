@@ -8,16 +8,28 @@ date: "`r Sys.Date()`"
 knitr::opts_chunk$set(echo = FALSE)
 ```
 
-```{r}
-library(Seurat)
+```{r setup, include=FALSE}
+library(reticulate)
+library(Matrix)
+library(phateR)
+library(Rmagic)
 library(tidyverse)
 library(ggpubr)
-library(Matrix)
 library(ggplot2)
 library(patchwork)
 library(SingleR)
 library(celldex)
 library(SingleCellExperiment)
+library(enrichR)
+library(clusterProfiler)
+library(Seurat)
+
+reticulate::py_require(c("magic-impute", "phate"))
+reticulate::py_config()
+if (!reticulate::py_module_available("phate") |
+    !reticulate::py_module_available("magic")) {
+  reticulate::py_install(c("magic-impute", "phate"), pip = TRUE)
+}
 ```
 
 ```{r}
@@ -169,7 +181,7 @@ plotScoreHeatmap(pred.bped.main,
                  order.by = "clusters",
                  show_colnames = FALSE)
 ```
-From this perspective it is quite clear that claster 11 contains melanocytes (tumor) and all other clasters are the immune microenvironment. To get a deeper understanding of what is going on in the immune microenvironment the MonacoImmuneData can be utilized.
+From this perspective it is quite clear that cluster 11 contains melanocytes (tumor) and all other clusters are the immune microenvironment. To get a deeper understanding of what is going on in the immune microenvironment the MonacoImmuneData can be utilized.
 
 ```{r, fig.height=15 }
 mimd.se <- MonacoImmuneData()
@@ -241,16 +253,18 @@ plotScoreHeatmap(pred.comb,
 table(melanoma$predicted_id, melanoma$seurat_clusters)
 
 ```
+
+Some Identities are duplicates, it will be probably explained by metabolism analysis later.
 ```{r}
 Idents(melanoma) <- melanoma$seurat_clusters
 new_ids <- c(
   "0" = "Naive B cells",
-  "1" = "Naive CD4 T cells*",
+  "1" = "Naive CD4 T cells",
   "2" = "Non-switched memory B cells",
   "3" = "Naive CD4 T cells*",
   "4" = "Switched memory B cells",
   "5" = "T regulatory cells",
-  "6" = "Naive B cells",
+  "6" = "Naive B cells*",
   "7" = "Naive CD8 T cells",
   "8" = "Vd2 gd T cells",
   "9" = "Myeloid dendritic",
@@ -263,3 +277,63 @@ melanoma$cell_type <- Idents(melanoma)
 DimPlot(melanoma, label.size = 3, label = TRUE) + NoLegend() 
 ```
 The T-cell, B-cell, and dendritic cell populations are clearly distinct, with the melanocyte cluster also forming a separate group. One specific B-cell cluster is particularly noteworthy as it is positioned away from the others; it expresses a set of exhausted B-cell markers absent in other clusters, potentially indicating a hidden communication axis with the melanoma. Fully identifying sub-populations remains challenging because this map captures a 'dynamic cell transformation' process. As markers gradually appear and disappear, a 'pseudotime' or trajectory analysis is required to resolve these transitions.
+
+```{r}
+s.genes <- cc.genes.updated.2019$s.genes
+g2m.genes <- cc.genes.updated.2019$g2m.genes
+
+melanoma <- CellCycleScoring(melanoma, 
+                             s.features = s.genes, 
+                             g2m.features = g2m.genes, 
+                             set.ident = TRUE)
+
+DimPlot(melanoma, reduction = "umap", group.by = "Phase")
+```
+1. Clusters are defined by cell type, not cycle artifacts.
+2. Tumor cells are predominantly in G1, indicating a quiescent state at sampling.
+3. The distinct B-cell* cluster suggests a specific functional activation separate from naive/memory pools.
+
+PHATE + MAGIC 
+
+```{r}
+input_data_t <- t(LayerData(melanoma, assay = "RNA", layer = "data"))
+
+data_MAGIC <- magic(input_data_t, knn = 15, seed = 42)
+phate_res <- phate(data_MAGIC, knn = 20, t = "auto")
+phate_embeddings_raw <- as.matrix(phate_res$embedding)
+rownames(phate_embeddings_raw) <- rownames(input_data_t)
+final_mat <- matrix(NA, nrow = ncol(melanoma), ncol = 2)
+rownames(final_mat) <- colnames(melanoma)
+colnames(final_mat) <- c("PHATEMAGIC_1", "PHATEMAGIC_2")
+common <- intersect(rownames(final_mat), rownames(phate_embeddings_raw))
+final_mat[common, ] <- phate_embeddings_raw[common, ]
+
+melanoma[["phate_magic"]] <- CreateDimReducObject(
+  embeddings = final_mat, 
+  key = "PHATEMAGIC_", 
+  assay = "RNA"
+)
+my_cols <- c(
+  "Naive B cells" = "#1F78B4",        
+  "B cells*" = "#A6CEE3",             
+  "Switched memory B cells" = "#33A02C", 
+  "Non-switched memory B cells" = "#B2DF8A",
+  "Naive B cells*" = "#1c9099",
+  "Naive CD4 T cells" = "#E31A1C",
+  "Naive CD4 T cells*" = "#800026",
+  "Naive CD8 T cells" = "#FB9A99",    
+  "T regulatory cells" = "#FF7F00",   
+  "Vd2 gd T cells" = "#FDBF6F",      
+  "Melanocytes" = "#CAB2D6",          
+  "Myeloid dendritic" = "#6A3D9A",    
+  "Plasmacytoid dendritic" = "#FFFF99" 
+)
+
+p1 <- DimPlot(melanoma, reduction = "umap", group.by = "cell_type", cols = my_cols, pt.size = 0.6) + labs(title = "UMAP")
+p2 <- DimPlot(melanoma, reduction = "phate_magic", group.by = "cell_type", cols = my_cols, pt.size = 0.6) + labs(title = "MAGIC + PHATE")
+
+p1 + p2
+
+```
+
+
