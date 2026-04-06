@@ -25,6 +25,8 @@ library(clusterProfiler)
 library(Seurat)
 library(monocle3)
 library(SeuratWrappers)
+library(CellChat)
+library(ggalluvial)
 reticulate::py_require(c("magic-impute", "phate"))
 reticulate::py_config()
 if (!reticulate::py_module_available("phate") |
@@ -344,7 +346,6 @@ Pseudotime
 cds <- as.cell_data_set(melanoma)
 cds <- cluster_cells(cds, reduction_method = "UMAP")
 cds <- learn_graph(cds, use_partition = TRUE)
-
 get_roots_per_partition <- function(cds) {
   parts <- unique(partitions(cds))
   root_cells <- c()
@@ -382,16 +383,19 @@ p1 + p2
 Metabolism 
 
 ```{r}
+sig_markers <- melanoma.markers |>  filter(p_val_adj < 0.05)
+
 to_check <- c("Human_Gene_Atlas", "ENCODE_and_ChEA_Consensus_TFs_from_ChIP-X", 
               "KEGG_2019_Human", "MSigDB_Hallmark_2020")
 
 pdf("All_Clusters_Enrichr_Report.pdf", width = 16, height = 10)
+
 for (target_cluster in sort(unique(sig_markers$cluster))) {
   
   message(paste("Processing cluster:", target_cluster))
 
-  cl_genes <- sig_markers |>  
-    filter(cluster == target_cluster) |>  
+  cl_genes <- sig_markers |> 
+    filter(cluster == target_cluster) |> 
     pull(gene)
 
   if(length(cl_genes) == 0) next
@@ -403,8 +407,8 @@ for (target_cluster in sort(unique(sig_markers$cluster))) {
     if (is.null(df) || nrow(df) == 0) return(NULL)
     
     df |> 
-      top_n(10, wt = -log10(Adjusted.P.value)) |> 
-      mutate(Term = stringr::str_trunc(Term, 45)) |>  
+      top_n(10, wt = -log10(Adjusted.P.value)) |>  
+      mutate(Term = stringr::str_trunc(Term, 45)) |>   
       mutate(Term = factor(Term, levels = rev(unique(Term)))) |> 
       ggplot(aes(x = Term, y = -log10(Adjusted.P.value), fill = Combined.Score)) +
       geom_col() +
@@ -413,14 +417,17 @@ for (target_cluster in sort(unique(sig_markers$cluster))) {
       labs(title = db, x = "") +
       scale_fill_gradient(low = "skyblue", high = "darkblue")
   })
-  
+
   plotList <- Filter(Negate(is.null), plotList)
-  combined_plot <- cowplot::plot_grid(plotlist = plotList, labels = "AUTO", ncol = 2) +
-    patchwork::plot_annotation(
-      title = paste("Cluster", target_cluster, "Enrichr Analysis"),
-      theme = theme(plot.title = element_text(size = 20, face = "bold", hjust = 0.5))
-    )
-  print(combined_plot)
+  
+  if(length(plotList) > 0) {
+    combined_plot <- cowplot::plot_grid(plotlist = plotList, labels = "AUTO", ncol = 2) +
+      patchwork::plot_annotation(
+        title = paste("Cluster", target_cluster, "Enrichr Analysis"),
+        theme = theme(plot.title = element_text(size = 20, face = "bold", hjust = 0.5))
+      )
+    print(combined_plot)
+  }
 }
 
 dev.off()
@@ -438,8 +445,73 @@ Cluster 8 represents a specialized population of Vd2 gd T-cells and memory CD8+ 
 
 Summary: The clustering is driven by functional shifts (exhaustion, inflammation, and protein secretion) rather than just cell lineage.
 
+```{r}
+cellchat <- createCellChat(object = GetAssayData(melanoma, assay = "RNA", slot = "data"), 
+                           meta = melanoma@meta.data, 
+                           group.by = "cell_type")
 
+cellchat@DB <- CellChatDB.human
 
+cellchat <- cellchat |> 
+  subsetData() |> 
+  identifyOverExpressedGenes() |> 
+  identifyOverExpressedInteractions() |> 
+  computeCommunProb(type = "triMean") |>  
+  filterCommunication(min.cells = 10) |> 
+  computeCommunProbPathway() |> 
+  aggregateNet() |>
+  netAnalysis_computeCentrality(slot.name = "netP")
+
+pdf("Signaling_Heatmap.pdf", width = 8, height = 10)
+netAnalysis_signalingRole_heatmap(cellchat, 
+                                  pattern = "outgoing", 
+                                  width = 10, 
+                                  height = 18, 
+                                  font.size = 8)
+netAnalysis_signalingRole_heatmap(cellchat, 
+                                  pattern = "incoming", 
+                                  width = 10, 
+                                  height = 18, 
+                                 font.size = 8)
+dev.off()
+
+rank.df <- data.frame(score = apply(cellchat@netP$prob, 3, sum)) |> 
+  (\(df) df[order(df$score, decreasing = TRUE), , drop = FALSE])()
+head(rank.df, 15)
+
+melanoma.rank <- subsetCommunication(cellchat, sources.use = "Melanocytes") |>
+  aggregate(prob ~ pathway_name, data = _, sum) |>
+  (\(df) df[order(df$prob, decreasing = TRUE), ])()
+head(melanoma.rank, 15)
+
+pdf("Signaling_diagrams.pdf", width = 16, height = 8)
+imm_paths_all <- intersect(c("MIF", "MHC-I", "ADGRE5"), cellchat@netP$pathways)
+netVisual_chord_gene(cellchat, signaling = imm_paths_all, 
+                     slot.name = "netP", 
+                     thresh = 0.1,
+                     lab.cex = 0.7, 
+                     small.gap = 2)
+imm_paths_mel <- intersect(c("MIF", "APP", "LAMININ", "MK", "SPP1", "MHC-I", "CD99"), cellchat@netP$pathways)
+netVisual_chord_gene(cellchat, signaling = imm_paths_mel, 
+                     slot.name = "netP", 
+                     sources.use = "Melanocytes", 
+                     thresh = 0.1, 
+                     lab.cex = 0.7)
+dev.off()
+```
+
+Conclusions of the Melanoma Interactome Analysis
+- Melanocytes function as the primary signaling hubs, actively coordinating the functional state and communication patterns within the tumor microenvironment.
+
+- The immune compartment demonstrates high recruitment and intense intercellular crosstalk, with CD8+ T-cells and Vd2 gd T-cells serving as the central receivers of signals from all cell clusters.
+
+- Despite active immune infiltration, the high-scoring MIF pathway indicates a dominant state of immunosuppression, effectively neutralizing the cytotoxic potential of the T-cell response.
+
+- Increased activity in LAMININ, CD99, and SPP1 pathways reflects the tumor’s readiness for extracellular matrix remodeling and tissue invasion.
+
+- Elevated expression of APP and MK supports tumor cell survival and growth signals, while the overall transcriptomic profile suggests cells remain primarily in the G1 phase.
+
+- The MHC-I signaling pathway is present but relatively weak compared to immunosuppressive factors, pointing toward impaired antigen presentation and efficient immune evasion by the tumor.
 
 
 
