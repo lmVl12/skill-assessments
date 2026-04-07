@@ -1,14 +1,65 @@
 ---
 title: "Single-Cell RNA-Seq"
-output: html_document
+self_contained: true
+output:
+  html_document:
+    theme: lumen        
+    highlight: tango     
+    toc: true            
+    toc_float: true
+    code_folding: hide 
+    number_sections: false     
+    df_print: paged   
 date: "`r Sys.Date()`"
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(
+  message = FALSE,
+  warning = FALSE,
+  fig.width = 10,
+  fig.height = 7,
+  fig.align = "center",
+  out.width = "100%"
+)
 ```
 
-```{r setup, include=FALSE}
+
+```{css, echo=FALSE}
+/*Custom tab appearence */ 
+.tab-content {
+    border: 1px solid #e0e0e0; 
+    border-top: none;          
+    padding: 20px;             
+    background-color: #fcfcfc; 
+    border-radius: 0 0 10px 10px; 
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05); 
+    margin-bottom: 30px;  
+    min-height: 710px;  
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+}
+.nav-pills > li.active > a {
+    font-weight: bold;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+body {
+    font-size: 16px; 
+    line-height: 1.6;
+    text-align: justify;
+}
+h1, h2, h3, .nav-pills {
+    text-align: left;
+}
+
+h1, h2, h3 {
+    font-weight: bold;
+    color: #2c3e50;
+}
+```
+
+```{r libraries, include=FALSE}
 library(reticulate)
 library(Matrix)
 library(phateR)
@@ -27,6 +78,8 @@ library(monocle3)
 library(SeuratWrappers)
 library(CellChat)
 library(ggalluvial)
+library(DT)
+library(kableExtra)
 reticulate::py_require(c("magic-impute", "phate"))
 reticulate::py_config()
 if (!reticulate::py_module_available("phate") |
@@ -35,7 +88,14 @@ if (!reticulate::py_module_available("phate") |
 }
 ```
 
+### Introduction
+
+Cutaneous melanoma is an aggressive skin cancer arising from melanocytes that is driven by UV-induced DNA damage and key oncogenic pathway alterations (notably MAPK and PI3K signaling), and is among the most heterogeneous human malignancies at genetic, transcriptomic, and phenotypic levels [1]. This heterogeneity is reflected in diverse melanoma cell states and dynamic phenotype switching between proliferative and invasive programs, contributing to metastasis, immune evasion, and resistance to targeted and immune checkpoint therapies [2]. Melanoma progression is tightly coupled to a complex tumor microenvironment enriched for cancer-associated fibroblasts, tumor-associated macrophages, diverse lymphocyte subsets, and other stromal elements, whose bidirectional interactions with melanoma cells shape intratumoral ecosystems that are now being dissected at single-cell resolution [3].
+
+*Data Origin*
+
 ```{r}
+if (!dir.exists("processed_data")) { dir.create("processed_data") }
 if (!file.exists("melanoma_matrix.tar.gz")) {
   download.file(
     url = "https://cf.10xgenomics.com/samples/cell-exp/8.0.0/10k_Human_DTC_Melanoma_3p_nextgem_10k_Human_DTC_Melanoma_3p_nextgem/10k_Human_DTC_Melanoma_3p_nextgem_10k_Human_DTC_Melanoma_3p_nextgem_count_sample_filtered_feature_bc_matrix.tar.gz",
@@ -43,110 +103,196 @@ if (!file.exists("melanoma_matrix.tar.gz")) {
     method = "curl"
   )
 }
-```
-
-
-```{r}
 if (!dir.exists("sample_filtered_feature_bc_matrix")) {
   untar("melanoma_matrix.tar.gz")
 }
-list.dirs(recursive = FALSE)
 ```
 
-```{r}
+The dataset utilized in this analysis was provided by 10x Genomics:
+
+Dissociated Tumor Cells (DTCs) from Human Melanoma (Female, age 50-60), Single Cell Gene Expression and VDJ Dataset by Cell Ranger v8.0.0, 10x Genomics, (2024).
+
+The sample consisted of dissociated tumor cells (DTCs) obtained from Discovery Life Sciences. Gene expression and VDJ libraries were prepared following the Chromium GEM-X Single Cell 5' Reagent Kits v3 User Guide (CG000733).
+
+*Technical Sequencing Parameters*
+Libraries were sequenced on an Illumina NovaSeq 6000 platform with a target depth of approximately 70,000 read pairs per cell. Sequencing was performed using paired-end, dual indexing with the following configuration:
+
+Read 1: 28 cycles
+i7 Index: 10 cycles
+i5 Index: 10 cycles
+Read 2: 90 cycles
+
+Raw sequencing data were processed using the cellranger multi pipeline in Cell Ranger v8.0.0 and a feature-barcode matrix was used for downstream analysis.
+
+*Study Objectives*
+- Identify the diverse immune and stromal populations infiltrating the tumor.
+- Map the signaling axes (e.g., MIF, MHC-I, SPP1) that drive immune evasion.
+- Differentiate cell states based on their transcriptomic and metabolic profiles (e.g., exhausted vs. effector T-cells).
+
+### Data processing and quality control
+
+*Filtering and Quality Metrics*
+To ensure the integrity of the downstream analysis, a stringent quality control (QC) pipeline was implemented. Cells were evaluated based on unique molecular identifier (UMI) counts, the number of detected genes, and the proportion of mitochondrial transcripts.
+
+The following filtering criteria were applied:
+
+-Only cells with more than 500 and fewer than 6,000 detected genes were retained.
+-A threshold of less than 10% mitochondrial UMIs was set to exclude apoptotic or damaged cells.
+
+```{r unprocessed data featureplots}
 mat <- Read10X(data.dir = "sample_filtered_feature_bc_matrix")
 melanoma_raw <- CreateSeuratObject(counts = mat, project = "Melanoma_10k")
-```
-
-```{r}
-View(mat)
-View(melanoma_raw)
-```
-
-```{r}
+# QC visualization
 melanoma_raw <- melanoma_raw |> 
   PercentageFeatureSet(pattern = "^MT-", col.name = "percent.mt")
 
 VlnPlot(melanoma_raw, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
 FeatureScatter(melanoma_raw, feature1 = "nCount_RNA", feature2 = "percent.mt")
 ```
+*Normalization and Feature Selection*
+Following the exclusion of low-quality cells, data normalization was performed using a global-scaling method (LogNormalize). To focus the analysis on biological variation, the top 2,000 highly variable features were identified using the variance-stabilizing transformation (vst) method. Subsequently, data scaling was executed to shift the mean expression to 0 and the variance to 1 for each gene.
 
-```{r}
+```{r processed data featureplots}
+if (!file.exists("processed_data/melanoma_normalized.rds")) {
 melanoma <- melanoma_raw |> 
   subset(subset = nFeature_RNA > 500 & nFeature_RNA < 6000 & percent.mt < 10) |>  
   NormalizeData() |> 
   FindVariableFeatures(selection.method = "vst", nfeatures = 2000) |> 
   ScaleData()
-
-# check the results
+saveRDS(melanoma, "processed_data/melanoma_normalized.rds")
+} else {
+  melanoma <- readRDS("processed_data/melanoma_normalized.rds")
+}
 melanoma |> 
   FeatureScatter(feature1 = "nCount_RNA", feature2 = "percent.mt") +
   theme_bw()
 ```
-#### PCA
-```{r}
+
+To evaluate the technical quality of the sequencing run, key metrics were summarized. The high median gene count per cell and substantial sequencing depth suggest a high-complexity library suitable for resolving subtle cellular states.
+
+```{r QC stats}
+comparison_stats <- data.frame(
+  Metric = c(
+    "Estimated Number of Cells",
+    "Median Genes per Cell",
+    "Median UMI Counts per Cell",
+    "Mean Mitochondrial Content (%)"
+  ),
+  Raw_Data = c(
+    "12814", 
+    "2686", 
+    "11390", 
+    paste0(round(mean(melanoma_raw$percent.mt), 2), "%") 
+  ),
+  Filtered_Data = c(
+    as.character(ncol(melanoma)),
+    as.character(round(median(melanoma$nFeature_RNA), 0)),
+    as.character(round(median(melanoma$nCount_RNA), 0)),
+    paste0(round(mean(melanoma$percent.mt), 2), "%")
+  )
+)
+
+knitr::kable(
+  comparison_stats, 
+  caption = "Technical Metrics Comparison (Raw vs. Filtered)",
+  col.names = c("Metric", "Raw (10x Genomics Report)", "Filtered"),
+  align = "lcc",
+  format = "html",
+  table.attr = 'class="table table-hover" style="width: 80%;"'
+)
+```
+
+### Dimensionality Reduction {.tabset .tabset-pills}
+
+#### Linaar dimensionality reduction (PCA)
+
+Linear dimensionality reduction was performed using Principal Component Analysis (PCA) to identify the primary axes of variation. To validate the biological relevance of the computed components, the top gene loadings were examined. PC1 and PC2 were predominantly driven by established melanoma markers and myeloid lineage genes. 
+
+Specifically: S100A1 and EDNRB (Endothelin Receptor B) showed high loadings, consistent with their role as markers of melanoma progression and overexpression in cutaneous malignancies [4,5].
+Myeloid markers: TYROBP and CST3 (Cystatin C) contributed significantly to the variance, representing the infiltration of macrophages, monocytes, and dendritic cells within the tumor microenvironment [6].
+
+```{r PCA}
 melanoma <- RunPCA(melanoma)
-
 DimPlot(melanoma)
-
-# What are the genes that determine PC1 and PC2?
 VizDimLoadings(melanoma, dims = 1:2)
+FeaturePlot(melanoma, features = c("S100A1", "CST3", "EDNRB"))    # PC1
+FeaturePlot(melanoma, features = c("LYZ", "TYROBP"))              # PC2 
 ```
 
+#### Non-linear Dimensionality reduction (clasterization)
 
+To determine the optimal number of Principal Components (PCs) for downstream non-linear dimensionality reduction, an Elbow plot was utilized. This heuristic identifies the point where additional components contribute minimally to the total variance - the first 25 PCs were selected. These components were subsequently used as input for graph-based clustering (resolution 0.5).
 ```{r}
-FeaturePlot(melanoma, features = c("S100A1", "CST3", "EDNRB"))
-
-FeaturePlot(melanoma, features = c("LYZ", "TYROBP"))
-
-# Select number of PCs
 ElbowPlot(melanoma, ndims = 50)
-```
-NOTES: 
-1.Endothelin receptor B (ETRB or EDNRB) is overexpressed in most human melanomas and is proposed to provide a marker of melanoma progression.
-2. Overexpression of S100A1 is associated with melanoma, breast cancer, ovarian cancer, and endometrial carcinoma (similar to S100A1 expression profile).
-3. Factors upregulated CysC secretion by melanoma. Similarly, melanoma-derived factors upregulated CysC secretion by microglia.
-4. TYROBP is a prognostic marker in Skin cutaneous melanoma/ Cell type enhanced (Hofbauer cells, Kupffer cells, Neutrophils, monocytes, Macrophages, cDC, pDCs, NK-cells, Mast cells)
-
-```{r}
+if (!file.exists("processed_data/melanoma_clustered.rds")) {
 melanoma <- melanoma |> 
   FindNeighbors(dims = 1:25) |> 
   FindClusters(resolution = 0.5) |>  
   RunUMAP(dims = 1:25)
-
-DimPlot(melanoma, reduction = "umap", label = TRUE) + NoLegend()
+saveRDS(melanoma, "processed_data/melanoma_clustered.rds")
+} else {
+  # Завантажуємо об'єкт, де UMAP та кластери вже є
+  melanoma <- readRDS("processed_data/melanoma_clustered.rds")
+}
+# Uncomment to see the unannotated clusters
+#DimPlot(melanoma, reduction = "umap", label = TRUE) + NoLegend()
 ```
 
+### { - .unlisted}
+## Cell type annotation
 
-## Marker annotation
-```{r}
+To resolve the cellular composition of the melanoma microenvironment, a multi-step annotation strategy was employed, beginning with the validation of cluster-specific markers and canonical lineage genes
+
+### Manual marker validation {.tabset .tabset-pills}
+
+The top 5 differentially expressed genes (DEGs) for each cluster were identified using the Wilcoxon test. These statistical markers serve as the primary evidence for cell-type assignment.
+
+#### Cell markers table
+
+```{r manual mapping}
+if (!file.exists("processed_data/melanoma_markers.rds")) {
 melanoma.markers <- FindAllMarkers(melanoma,
                                only.pos = TRUE, 
                                min.pct = 0.25, 
                                logfc.threshold = 0.5)
-```
-Step 1. Prior knowledge markers
-
-```{r}
+saveRDS(melanoma.markers, "processed_data/melanoma_markers.rds")
+} else {
+melanoma.markers <- readRDS("processed_data/melanoma_markers.rds")
+}
 top5_markers <- melanoma.markers |> 
   group_by(cluster) |> 
-  slice_max(n = 5, order_by = avg_log2FC)
+  slice_max(n = 5, order_by = avg_log2FC) |> 
+  mutate(
+    p_val = formatC(p_val, format = "e", digits = 2),
+    p_val_adj = formatC(p_val_adj, format = "e", digits = 2),
+    avg_log2FC = round(avg_log2FC, 2),
+    pct.1 = round(pct.1, 3),
+    pct.2 = round(pct.2, 3)
+  )
 
-View(top5_markers)
+DT::datatable(
+  top5_markers, 
+  caption = "Top 5 Differentially expressed genes per cluster",
+  options = list(pageLength = 10, scrollX = TRUE),
+  rownames = FALSE
+)
 # Look for "unique only/mostly" markers 
-for(i in unique(top5_markers$cluster)) {
-  genes_to_plot <- top5_markers %>% filter(cluster == i) |>  pull(gene)
-  
-  p <- FeaturePlot(melanoma, features = genes_to_plot, ncol = 3) + 
+pdf("Cluster_Markers_manual.pdf", width = 12, height = 8)
+for(i in sort(unique(top5_markers$cluster))) {
+  genes_to_plot <- top5_markers %>% filter(cluster == i) |> pull(gene)
+  p1 <- FeaturePlot(melanoma, features = genes_to_plot, ncol = 3) + 
     plot_annotation(title = paste("Top markers for Cluster", i))
-  
-  print(p)
+  print(p1)
 }
+dev.off()
 
 ```
+The spatial distribution maps for all candidate markers were exported to a dedicated supplement for detailed review: [Exploratory FeaturePlots (PDF)](Cluster_Markers_manual.pdf). These plots confirm the localized expression patterns.
 
+#### Cell marker visualization 
 
-```{r}
+To validate lineage commitment, canonical markers for immune and malignant populations were visualized across all clusters.
+```{r marker IDs violin plots}
 marker_list_melanoma <- list(
   'Neurons/tumor' = c("SYN3", "NETO1"),
   'T cells' = c("CD40LG"),
@@ -162,89 +308,69 @@ marker_vln <- function(srt, marker_list, group_name) {
     patchwork::plot_annotation(title = group_name)
   return(vln)
 }
-
 vlnList <- lapply(names(marker_list_melanoma), marker_vln, 
                   srt = melanoma, marker_list = marker_list_melanoma)
 final_ga <- ggarrange(plotlist = vlnList, ncol = 1)
-
 ggsave(final_ga, filename = "melanoma_validation_violins.png", height = 25, width = 15)
 ```
 
-Step 2. Semi-automated annotation
+The consolidated visualization of lineage-specific expression is available for high-resolution analysis: [Violin plots (PNG)](melanoma_validation_violins.png).
 
-```{r, fig.height=10}
-bped.se <- BlueprintEncodeData()
-sceP <- as.SingleCellExperiment(melanoma)
-pred.bped.main <- SingleR(test = sceP, 
-                          ref = bped.se, 
-                          labels = bped.se$label.main)
-plotScoreHeatmap(pred.bped.main,
-                 max.labels = 8,
-                 clusters = melanoma$seurat_clusters,
-                 order.by = "clusters",
-                 show_colnames = FALSE)
-```
-From this perspective it is quite clear that cluster 11 contains melanocytes (tumor) and all other clusters are the immune microenvironment. To get a deeper understanding of what is going on in the immune microenvironment the MonacoImmuneData can be utilized.
+### { - .unlisted}
+**Preliminary Findings (Manual Validation)**
 
-```{r, fig.height=15 }
-mimd.se <- MonacoImmuneData()
+- Malignant Compartment (Cluster 11): The presence of EDN3 and other melanocyte-associated features unequivocally identifies the malignant population.
 
-sceP <- as.SingleCellExperiment(melanoma)
-pred.mimd.main <- SingleR(test = sceP, 
-                          ref = mimd.se, 
-                          labels = mimd.se$label.main)
-pred.mimd.fine <- SingleR(test = sceP, 
-                          ref = mimd.se, 
-                          labels = mimd.se$label.fine)
-plotScoreHeatmap(pred.mimd.main,
-                 max.labels = 20,
-                 clusters = melanoma$seurat_clusters,
-                 order.by = "clusters",
-                 show_colnames = FALSE)
-plotScoreHeatmap(pred.mimd.fine,
-                 max.labels = 20,
-                 clusters = melanoma$seurat_clusters,
-                 order.by = "clusters",
-                 show_colnames = FALSE)
+- Humoral Activity (Cluster 10): The specific expression of IGHG3 and IGHGP points to a plasma cell population, suggesting an active antibody-mediated response within the tumor.
 
-```
-Some of the "fine" labels seem to be robust, but some are not.
+- Immune Infiltration: Clear segregation of T cells (CD40LG), NK cells (NKG7), and Macrophages (CD163) indicates a complex and heterogeneous immune landscape.
 
+- Potential "Dynamic" States: Several clusters (marked with * in final IDs) exhibit overlapping markers or intermediate expression levels, suggesting a continuum of cell states rather than discrete categories.
 
-```{r}
-### 1. Re-train SingleR (Optimizing for available genes)
-# This step ensures SingleR only uses genes present in your specific dataset
-my_genes <- rownames(sceP)
+### Automated reference mapping {.tabset .tabset-pills}
 
-trained_mimd_main <- trainSingleR(mimd.se, 
-                                  labels = mimd.se$label.main, 
-                                  test.genes = my_genes)
+#### Findings & Consensus
 
-trained_mimd_fine <- trainSingleR(mimd.se, 
-                                  labels = mimd.se$label.fine, 
-                                  test.genes = my_genes)
+```{r automatic mapping, fig.height=10}
+# Predictions with different DBs
+if (!file.exists("processed_data/singler_results.rds")) {
 
-# Combine Main and Fine level predictions for higher accuracy
-pred.comb <- combineRecomputedResults(
+  bped.se <- BlueprintEncodeData()
+  mimd.se <- MonacoImmuneData()
+  sceP <- as.SingleCellExperiment(melanoma)
+  pred.bped.main <- SingleR(test = sceP, ref = bped.se, labels = bped.se$label.main)
+  pred.mimd.main <- SingleR(test = sceP, ref = mimd.se, labels = mimd.se$label.main)
+  pred.mimd.fine <- SingleR(test = sceP, ref = mimd.se, labels = mimd.se$label.fine)
+# Combine the IDs 
+  my_genes <- rownames(sceP)
+  trained_mimd_main <- trainSingleR(mimd.se, labels = mimd.se$label.main, test.genes = my_genes)
+  trained_mimd_fine <- trainSingleR(mimd.se, labels = mimd.se$label.fine, test.genes = my_genes)
+  pred.comb <- combineRecomputedResults(
   results = list(Main = pred.mimd.main, Fine = pred.mimd.fine),
   test = sceP, 
   trained = list(Main = trained_mimd_main, Fine = trained_mimd_fine),
   assay.type.test = "logcounts"
-)
+  )
+  pred.mimd.fine$clusters <- melanoma$seurat_clusters
+  
+  saveRDS(list(
+    bped = pred.bped.main,
+    mimd_main = pred.mimd.main,
+    mimd_fine = pred.mimd.fine,
+    comb = pred.comb
+  ), "processed_data/singler_results.rds")
+  
+} else {
+  singler_res <- readRDS("processed_data/singler_results.rds")
+  pred.bped.main <- singler_res$bped
+  pred.mimd.main <- singler_res$mimd_main
+  pred.mimd.fine <- singler_res$mimd_fine
+  pred.comb      <- singler_res$comb
+}
 
-### 2. Diagnostics & Confidence Assessment
-# Check which markers were used and assess assignment confidence
-metadata(pred.mimd.fine)$common.markers
-pred.mimd.fine$clusters <- melanoma$seurat_clusters
-
-# Visualizing score distribution (how clear the "winner" is for each cell)
-plotScoreDistribution(pred.mimd.fine)
-
-### 3. Final Integration & Validation
-# Map the high-confidence (pruned) labels back to the Seurat object
 melanoma$predicted_id <- pred.comb$pruned.labels
 
-# Final summary heatmap of combined results
+plotScoreDistribution(pred.mimd.fine)
 plotScoreHeatmap(pred.comb,
                  max.labels = 20,
                  clusters = melanoma$seurat_clusters,
@@ -252,53 +378,95 @@ plotScoreHeatmap(pred.comb,
                  show_colnames = FALSE,
                  main = "Final Combined Annotation")
 
-# Cross-tabulation to compare Clusters vs. Predicted IDs
-table(melanoma$predicted_id, melanoma$seurat_clusters)
+# Technical supplements
+pdf("Cluster_Markers_auto.pdf", height = 10)
 
+print(plotScoreHeatmap(pred.bped.main,
+                 max.labels = 8,
+                 clusters = melanoma$seurat_clusters,
+                 order.by = "clusters",
+                 show_colnames = FALSE,
+                 main = "Blueprint/Encode identification"))
+
+print(plotScoreHeatmap(pred.mimd.main,
+                 max.labels = 20,
+                 clusters = melanoma$seurat_clusters,
+                 order.by = "clusters",
+                 show_colnames = FALSE,
+                 main = "Monaco Immune main labels"))
+
+print(plotScoreHeatmap(pred.mimd.fine,
+                 max.labels = 20,
+                 clusters = melanoma$seurat_clusters,
+                 order.by = "clusters",
+                 show_colnames = FALSE,
+                 main = "Monaco Immune fine labels"))
+
+dev.off()
+```
+Detailed results of identifictaion are available for download [Cluster markers heatmaps (PDF)](Cluster_Markers_auto.pdf)
+
+#### Cluster-Identity Table
+
+```{r cluster IDs table}
+conf_table <- table(melanoma$predicted_id, melanoma$seurat_clusters)
+DT::datatable(
+  as.data.frame.matrix(conf_table),
+  caption = "Table 3: Seurat Clusters vs. SingleR predicted IDs",
+  options = list(pageLength = 35, scrollX = TRUE)
+)
 ```
 
-Some Identities are duplicates, it will be probably explained by metabolism analysis later.
-```{r}
+### { - .unlisted}
+
+From this perspective it is quite clear that cluster 11 contains melanocytes (tumor) and all other clusters are the immune microenvironment.
+
+### Spatial organization
+
+```{r final umap}
 Idents(melanoma) <- melanoma$seurat_clusters
-new_ids <- c(
+initial_ids <- c(
   "0" = "Naive B cells",
-  "1" = "Naive CD4 T cells",
+  "1" = "Naive CD4 T cells candidate 1",
   "2" = "Non-switched memory B cells",
-  "3" = "Naive CD4 T cells*",
+  "3" = "Naive CD4 T cells candidate 2",
   "4" = "Switched memory B cells",
   "5" = "T regulatory cells",
-  "6" = "Naive B cells*",
+  "6" = "Unknown/mixed naive B cells",
   "7" = "Naive CD8 T cells",
-  "8" = "Vd2 gd T cells",
-  "9" = "Myeloid dendritic",
-  "10" = "B cells*",
+  "8" = "Vd2 gd T cells candidate/ central memory",
+  "9" = "Myeloid DC",
+  "10" = "B cells of different profile",
   "11" = "Melanocytes",
-  "12" = "Plasmacytoid dendritic"
+  "12" = "Plasmacytoid DC"
 )
-melanoma <- RenameIdents(melanoma, new_ids)
+melanoma <- RenameIdents(melanoma, initial_ids)
 melanoma$cell_type <- Idents(melanoma)
-DimPlot(melanoma, label.size = 3, label = TRUE) + NoLegend() 
-```
-The T-cell, B-cell, and dendritic cell populations are clearly distinct, with the melanocyte cluster also forming a separate group. One specific B-cell cluster is particularly noteworthy as it is positioned away from the others; it expresses a set of exhausted B-cell markers absent in other clusters, potentially indicating a hidden communication axis with the melanoma. Fully identifying sub-populations remains challenging because this map captures a 'dynamic cell transformation' process. As markers gradually appear and disappear, a 'pseudotime' or trajectory analysis is required to resolve these transitions.
-
-```{r}
+# Cell cycle analysis
 s.genes <- cc.genes.updated.2019$s.genes
 g2m.genes <- cc.genes.updated.2019$g2m.genes
 
-melanoma <- CellCycleScoring(melanoma, 
+melanoma_cycle <- CellCycleScoring(melanoma, 
                              s.features = s.genes, 
                              g2m.features = g2m.genes, 
                              set.ident = TRUE)
 
-DimPlot(melanoma, reduction = "umap", group.by = "Phase")
+p1_init <- DimPlot(melanoma, reduction = "umap", label.size = 3, label = TRUE) + NoLegend()
+p2_init <- DimPlot(melanoma_cycle,  group.by = "Phase")
+p1_init + p2_init
+
 ```
+The T-cell, B-cell, and dendritic cell populations are clearly distinct, with the melanocyte cluster also forming a separate group. One specific B-cell cluster is particularly noteworthy as it is positioned away from the others; it expresses a set of exhausted B-cell markers absent in other clusters, potentially indicating a hidden communication axis with the melanoma. Fully identifying sub-populations remains challenging because this map captures a 'dynamic cell transformation' process. As markers gradually appear and disappear, a 'pseudotime' or trajectory analysis is required to resolve these transitions.
+
 1. Clusters are defined by cell type, not cycle artifacts.
 2. Tumor cells are predominantly in G1, indicating a quiescent state at sampling.
 3. The distinct B-cell* cluster suggests a specific functional activation separate from naive/memory pools.
 
-PHATE + MAGIC 
+### Cellular dynamics and states {.tabset .tabset-pills}
+#### Continuum analysis 
 
-```{r}
+```{r phate/magic}
+if (!file.exists("processed_data/phate_magic_embeddings.rds")) {
 input_data_t <- t(LayerData(melanoma, assay = "RNA", layer = "data"))
 
 data_MAGIC <- magic(input_data_t, knn = 15, seed = 42)
@@ -311,6 +479,10 @@ colnames(final_mat) <- c("PHATEMAGIC_1", "PHATEMAGIC_2")
 common <- intersect(rownames(final_mat), rownames(phate_embeddings_raw))
 final_mat[common, ] <- phate_embeddings_raw[common, ]
 
+saveRDS(final_mat, "processed_data/phate_magic_embeddings.rds")
+} else {
+  final_mat <- readRDS("processed_data/phate_magic_embeddings.rds")
+}
 melanoma[["phate_magic"]] <- CreateDimReducObject(
   embeddings = final_mat, 
   key = "PHATEMAGIC_", 
@@ -318,31 +490,31 @@ melanoma[["phate_magic"]] <- CreateDimReducObject(
 )
 my_cols <- c(
   "Naive B cells" = "#1F78B4",        
-  "B cells*" = "#A6CEE3",             
+  "B cells of different profile" = "#A6CEE3",             
   "Switched memory B cells" = "#33A02C", 
   "Non-switched memory B cells" = "#B2DF8A",
-  "Naive B cells*" = "#1c9099",
-  "Naive CD4 T cells" = "#E31A1C",
-  "Naive CD4 T cells*" = "#800026",
+  "Unknown/mixed naive B cells" = "#1c9099",
+  "Naive CD4 T cells candidate 1" = "#E31A1C",
+  "Naive CD4 T cells candidate 2" = "#800026",
   "Naive CD8 T cells" = "#FB9A99",    
   "T regulatory cells" = "#FF7F00",   
-  "Vd2 gd T cells" = "#FDBF6F",      
+  "Vd2 gd T cells candidate/ central memory" = "#FDBF6F",      
   "Melanocytes" = "#CAB2D6",          
-  "Myeloid dendritic" = "#6A3D9A",    
-  "Plasmacytoid dendritic" = "#FFFF99" 
+  "Myeloid DC" = "#6A3D9A",    
+  "Plasmacytoid DC" = "#FFFF99" 
 )
 
-p1 <- DimPlot(melanoma, reduction = "umap", group.by = "cell_type", cols = my_cols, pt.size = 0.6) + labs(title = "UMAP")
-p2 <- DimPlot(melanoma, reduction = "phate_magic", group.by = "cell_type", cols = my_cols, pt.size = 0.6) + labs(title = "MAGIC + PHATE")
+p2 <- DimPlot(melanoma, reduction = "umap", group.by = "cell_type", cols = my_cols, pt.size = 0.6) + labs(title = "UMAP")
+p3 <- DimPlot(melanoma, reduction = "phate_magic", group.by = "cell_type", cols = my_cols, pt.size = 0.6) + labs(title = "MAGIC + PHATE")
 
-p1 + p2
+p2 + p3
 
 ```
 
-Pseudotime
+#### Lineage trajectories
 
-
-```{r}
+```{r cell cycle}
+if (!file.exists("processed_data/cell_cycle.rds")) {
 cds <- as.cell_data_set(melanoma)
 cds <- cluster_cells(cds, reduction_method = "UMAP")
 cds <- learn_graph(cds, use_partition = TRUE)
@@ -361,28 +533,35 @@ cds <- order_cells(cds,
                    reduction_method = "UMAP", 
                    root_cells = get_roots_per_partition(cds))
 
+saveRDS(final_mat, "processed_data/cell_cycle.rds")
+} else {
+  cds <- readRDS("processed_data/cell_cycle.rds")
+}
+
 colData(cds)$cell_type <- melanoma$cell_type
 
-p1 <- plot_cells(cds, 
+p4 <- plot_cells(cds, 
                  color_cells_by = "cell_type", 
                  label_cell_groups = FALSE,
                  label_leaves = FALSE, 
                  graph_label_size = 0) + 
   theme_minimal()
 
-p2 <- plot_cells(cds, 
+p5 <- plot_cells(cds, 
                  color_cells_by = "pseudotime", 
                  label_cell_groups = FALSE,
                  label_leaves = FALSE, 
                  graph_label_size = 0) + 
   theme_minimal()
-
-p1 + p2
+p4 + p5
 ```
 
-Metabolism 
+#### Metabolic cell states
 
-```{r}
+The consolidated visualization of activated metabolic pathways is available for high-resolution analysis: [Cluster metabolism (PDF)](All_Clusters_Enrichr_Report.pdf)
+
+```{r enrichr}
+if (!file.exists("All_Clusters_Enrichr_Report.pdf")) {
 sig_markers <- melanoma.markers |>  filter(p_val_adj < 0.05)
 
 to_check <- c("Human_Gene_Atlas", "ENCODE_and_ChEA_Consensus_TFs_from_ChIP-X", 
@@ -391,8 +570,6 @@ to_check <- c("Human_Gene_Atlas", "ENCODE_and_ChEA_Consensus_TFs_from_ChIP-X",
 pdf("All_Clusters_Enrichr_Report.pdf", width = 16, height = 10)
 
 for (target_cluster in sort(unique(sig_markers$cluster))) {
-  
-  message(paste("Processing cluster:", target_cluster))
 
   cl_genes <- sig_markers |> 
     filter(cluster == target_cluster) |> 
@@ -429,24 +606,54 @@ for (target_cluster in sort(unique(sig_markers$cluster))) {
     print(combined_plot)
   }
 }
-
 dev.off()
+}
 ```
+
+### { - .unlisted}
 
 Key Findings:
 
-Cluster 1 vs 3. Although both clusters are CD4+ T-cells and look similar on the surface, they are separated by their activation level and biological "mission": cluster 1 cells are in a state of acute inflammation. A very strong TNF-alpha signaling score (over 20 on the -log_10P scale). Cluster 3 cells are also in the tumor area, but they are receiving "calming" or regulatory signals: the TNF-alpha signal is weaker (around 15), and unique pathways like IL-6/STAT3 and IL-2/STAT5 appear.
+Cluster 1 vs 3. Although both clusters are CD4+ T-cells, they are separated by their activation level and biological "mission": cluster 1 cells are in a state of acute inflammation. A very strong TNF-alpha signaling score (over 20 on the -log_10P scale). Cluster 3 cells are also in the tumor area, but they are receiving "calming" or regulatory signals: the TNF-alpha signal is weaker (around 15), and unique pathways like IL-6/STAT3 and IL-2/STAT5 appear.
 
 Cluster 6 (Ambiguous B cells): Likely some B-T cell doublets. It lacks a strong B-cell metabolic signature and sits "physically" between B and T islands on the UMAP, suggesting a mixed transcriptional signal.
 
-Cluster 10 (Plasma B cells): A distinct functional lineage. The extreme shift on the UMAP is driven by a metabolic explosion: massive Proteasome activity and Oxidative Phosphorylation required for high-intensity antibody production.
+Cluster 10 (Plasma B cells): A distinct functional lineage. The extreme shift on the UMAP is driven by a metabolic explosion: massive Proteasome activity and Oxidative phosphorylation required for high-intensity antibody production.
 
 Cluster 8 represents a specialized population of Vd2 gd T-cells and memory CD8+ T-cells that exhibit a hybrid NK-like transcriptional profile and a high readiness for rapid anti-tumor response, as evidenced by the strong enrichment of T-cell receptor signaling and TNF-alpha inflammatory pathways.
 
 Summary: The clustering is driven by functional shifts (exhaustion, inflammation, and protein secretion) rather than just cell lineage.
 
 ```{r}
-cellchat <- createCellChat(object = GetAssayData(melanoma, assay = "RNA", slot = "data"), 
+Idents(melanoma) <- melanoma$seurat_clusters
+final_ids <- c(
+  "0" = "Naive B cells",
+  "1" = "Naive CD4 T cells state 1",
+  "2" = "Non-switched memory B cells",
+  "3" = "Naive CD4 T cells state 2",
+  "4" = "Switched memory B cells",
+  "5" = "T regulatory cells",
+  "6" = "Unknown mixed cluster",
+  "7" = "Naive CD8 T cells",
+  "8" = "Vd2 gd T cells",
+  "9" = "Myeloid DC",
+  "10" = "Plasma cells",
+  "11" = "Melanocytes",
+  "12" = "Plasmacytoid DC"
+)
+melanoma <- RenameIdents(melanoma, final_ids)
+melanoma$cell_type <- Idents(melanoma)
+DimPlot(melanoma, reduction = "umap", label.size = 3, label = TRUE) + NoLegend()
+```
+
+
+### Tumor microenvironment signaling {.tabset .tabset-pills}
+
+#### Global patterns
+
+```{r}
+if (!file.exists("processed_data/cellchat.rds")) {
+cellchat <- createCellChat(object = GetAssayData(melanoma, assay = "RNA", layer = "data"), 
                            meta = melanoma@meta.data, 
                            group.by = "cell_type")
 
@@ -462,45 +669,112 @@ cellchat <- cellchat |>
   aggregateNet() |>
   netAnalysis_computeCentrality(slot.name = "netP")
 
+saveRDS(cellchat, "processed_data/cellchat.rds")
+} else {
+  cellchat <- readRDS("processed_data/cellchat.rds")
+}
+
 pdf("Signaling_Heatmap.pdf", width = 8, height = 10)
-netAnalysis_signalingRole_heatmap(cellchat, 
+p6 <- netAnalysis_signalingRole_heatmap(cellchat, 
                                   pattern = "outgoing", 
                                   width = 10, 
-                                  height = 18, 
+                                  height = 10, 
                                   font.size = 8)
-netAnalysis_signalingRole_heatmap(cellchat, 
+print(p6)
+p7 <- netAnalysis_signalingRole_heatmap(cellchat, 
                                   pattern = "incoming", 
                                   width = 10, 
-                                  height = 18, 
+                                  height = 10, 
                                  font.size = 8)
+print(p7)
 dev.off()
+p6 + p7
 
+```
+
+[Open file in new window](Signaling_Heatmap.pdf){target="_blank"}
+
+#### Immune communication axis {.tabset .tabset-fade}
+##### Source table
+
+```{r}
 rank.df <- data.frame(score = apply(cellchat@netP$prob, 3, sum)) |> 
-  (\(df) df[order(df$score, decreasing = TRUE), , drop = FALSE])()
-head(rank.df, 15)
+  (\(df) df[order(df$score, decreasing = TRUE), , drop = FALSE])()|> 
+  slice_max(n = 15, order_by = score)
+knitr::kable(
+  rank.df, 
+  caption = "Table 4: Top signaling pathways of microenvironment",
+  col.names = c("Signaling pathway", "Score"),
+  align = "lcc",
+  format = "html",
+  table.attr = 'class="table table-hover" style="width: 80%;"'
+)
+```
 
-melanoma.rank <- subsetCommunication(cellchat, sources.use = "Melanocytes") |>
-  aggregate(prob ~ pathway_name, data = _, sum) |>
-  (\(df) df[order(df$prob, decreasing = TRUE), ])()
-head(melanoma.rank, 15)
+##### Chord diagram
 
-pdf("Signaling_diagrams.pdf", width = 16, height = 8)
+```{r}
+pdf("chord_all_cells.pdf")
 imm_paths_all <- intersect(c("MIF", "MHC-I", "ADGRE5"), cellchat@netP$pathways)
-netVisual_chord_gene(cellchat, signaling = imm_paths_all, 
+p8 <- netVisual_chord_gene(cellchat, signaling = imm_paths_all, 
                      slot.name = "netP", 
                      thresh = 0.1,
                      lab.cex = 0.7, 
                      small.gap = 2)
+print(p8)
+dev.off()
+p8 <- netVisual_chord_gene(cellchat, signaling = imm_paths_all, 
+                     slot.name = "netP", 
+                     thresh = 0.1,
+                     lab.cex = 0.7, 
+                     small.gap = 2)
+p8
+```
+[Open file in new window](chord_all_cells.pdf){target="_blank"}
+
+#### Melanoma communication axis {.tabset .tabset-fade}
+
+##### Sorce table
+
+```{r}
+melanoma.rank <- subsetCommunication(cellchat, sources.use = "Melanocytes") |>
+  aggregate(prob ~ pathway_name, data = _, sum) |>
+  (\(df) df[order(df$prob, decreasing = TRUE), ])()
+knitr::kable(
+  melanoma.rank, 
+  caption = "Table 4: Top signaling pathways of melanoma",
+  col.names = c("Signaling pathway", "Score"),
+  align = "lcc",
+  format = "html",
+  table.attr = 'class="table table-hover" style="width: 80%;"'
+)
+```
+
+##### Chord Diagram
+
+```{r}
+pdf("chord_melanoma.pdf")
 imm_paths_mel <- intersect(c("MIF", "APP", "LAMININ", "MK", "SPP1", "MHC-I", "CD99"), cellchat@netP$pathways)
-netVisual_chord_gene(cellchat, signaling = imm_paths_mel, 
+p9 <- netVisual_chord_gene(cellchat, signaling = imm_paths_mel, 
                      slot.name = "netP", 
                      sources.use = "Melanocytes", 
                      thresh = 0.1, 
                      lab.cex = 0.7)
+print(p9)
 dev.off()
+p9 <- netVisual_chord_gene(cellchat, signaling = imm_paths_mel, 
+                     slot.name = "netP", 
+                     sources.use = "Melanocytes", 
+                     thresh = 0.1, 
+                     lab.cex = 0.7)
+p9
 ```
 
-Conclusions of the Melanoma Interactome Analysis
+[Open file in new window](chord_melanoma.pdf){target="_blank"}
+
+### { - .unlisted}
+
+### Conclusions 
 - Melanocytes function as the primary signaling hubs, actively coordinating the functional state and communication patterns within the tumor microenvironment.
 
 - The immune compartment demonstrates high recruitment and intense intercellular crosstalk, with CD8+ T-cells and Vd2 gd T-cells serving as the central receivers of signals from all cell clusters.
@@ -512,6 +786,15 @@ Conclusions of the Melanoma Interactome Analysis
 - Elevated expression of APP and MK supports tumor cell survival and growth signals, while the overall transcriptomic profile suggests cells remain primarily in the G1 phase.
 
 - The MHC-I signaling pathway is present but relatively weak compared to immunosuppressive factors, pointing toward impaired antigen presentation and efficient immune evasion by the tumor.
+
+
+### References:
+1. Tasdogan, A., Sullivan, R., Katalinic, A., Lebbé, C., Whitaker, D., Puig, S., Van De Poll-Franse, L., Massi, D., & Schadendorf, D. (2025). Cutaneous melanoma. Nature Reviews Disease Primers, 11. https://doi.org/10.1038/s41572-025-00603-8.
+2. Hossain, S., & Eccles, M. (2023). Phenotype Switching and the Melanoma Microenvironment; Impact on Immunotherapy and Drug Resistance. International Journal of Molecular Sciences, 24. https://doi.org/10.3390/ijms24021601.
+3. Sikorski, H., Żmijewski, M., & Piotrowska, A. (2025). Tumor Microenvironment in Melanoma—Characteristic and Clinical Implications. International Journal of Molecular Sciences, 26. https://doi.org/10.3390/ijms26146778.
+4. Lahav, R., Suvà, M. L., Rimoldi, D., Patterson, P. H., & Stamenkovic, I. (2004). Endothelin receptor B inhibition triggers apoptosis and enhances angiogenesis in melanomas. Cancer research, 64(24), 8945–8953. https://doi.org/10.1158/0008-5472.CAN-04-1510
+5. Xiong, T. F., Pan, F. Q., & Li, D. (2019). Expression and clinical significance of S100 family genes in patients with melanoma. Melanoma research, 29(1), 23–29. https://doi.org/10.1097/CMR.0000000000000512
+6. TYROBP protein expression summary - The Human Protein Atlas. URL:https://www.proteinatlas.org/ENSG00000011600-TYROBP. Accessed: 2026-04-07
 
 
 
