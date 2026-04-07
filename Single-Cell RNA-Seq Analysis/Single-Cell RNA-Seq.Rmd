@@ -92,7 +92,7 @@ if (!reticulate::py_module_available("phate") |
 
 Cutaneous melanoma is an aggressive skin cancer arising from melanocytes that is driven by UV-induced DNA damage and key oncogenic pathway alterations (notably MAPK and PI3K signaling), and is among the most heterogeneous human malignancies at genetic, transcriptomic, and phenotypic levels [1]. This heterogeneity is reflected in diverse melanoma cell states and dynamic phenotype switching between proliferative and invasive programs, contributing to metastasis, immune evasion, and resistance to targeted and immune checkpoint therapies [2]. Melanoma progression is tightly coupled to a complex tumor microenvironment enriched for cancer-associated fibroblasts, tumor-associated macrophages, diverse lymphocyte subsets, and other stromal elements, whose bidirectional interactions with melanoma cells shape intratumoral ecosystems that are now being dissected at single-cell resolution [3].
 
-*Data Origin*
+**Data Origin**
 
 ```{r}
 if (!dir.exists("processed_data")) { dir.create("processed_data") }
@@ -108,36 +108,50 @@ if (!dir.exists("sample_filtered_feature_bc_matrix")) {
 }
 ```
 
-The dataset utilized in this analysis was provided by 10x Genomics:
+The dataset utilized in this analysis was provided by **10x Genomics**:
 
-Dissociated Tumor Cells (DTCs) from Human Melanoma (Female, age 50-60), Single Cell Gene Expression and VDJ Dataset by Cell Ranger v8.0.0, 10x Genomics, (2024).
+*Dissociated Tumor Cells (DTCs) from Human Melanoma (Female, age 50-60), Single Cell Gene Expression and VDJ Dataset by Cell Ranger v8.0.0, 10x Genomics, (2024).*
 
-The sample consisted of dissociated tumor cells (DTCs) obtained from Discovery Life Sciences. Gene expression and VDJ libraries were prepared following the Chromium GEM-X Single Cell 5' Reagent Kits v3 User Guide (CG000733).
+**Technical Sequencing Parameters**
 
-*Technical Sequencing Parameters*
-Libraries were sequenced on an Illumina NovaSeq 6000 platform with a target depth of approximately 70,000 read pairs per cell. Sequencing was performed using paired-end, dual indexing with the following configuration:
+  - The sample consisted of dissociated tumor cells (DTCs). Gene expression and VDJ libraries were prepared following the Chromium GEM-X Single Cell 5' Reagent Kits v3 User Guide (CG000733).
+
+  - Libraries were sequenced on an Illumina NovaSeq 6000 platform with a target depth of approximately 70,000 read pairs per cell. Sequencing was performed using paired-end, dual indexing with the following configuration:
 
 Read 1: 28 cycles
+
 i7 Index: 10 cycles
+
 i5 Index: 10 cycles
+
 Read 2: 90 cycles
 
-Raw sequencing data were processed using the cellranger multi pipeline in Cell Ranger v8.0.0 and a feature-barcode matrix was used for downstream analysis.
+  - Raw sequencing data were processed using the cellranger multi pipeline in Cell Ranger v8.0.0 and a feature-barcode matrix was used for downstream analysis.
 
-*Study Objectives*
-- Identify the diverse immune and stromal populations infiltrating the tumor.
-- Map the signaling axes (e.g., MIF, MHC-I, SPP1) that drive immune evasion.
-- Differentiate cell states based on their transcriptomic and metabolic profiles (e.g., exhausted vs. effector T-cells).
+**Study Objectives**
+
+  - Identify the diverse immune and stromal populations infiltrating the tumor.
+
+  - Map the signaling axes (e.g., MIF, MHC-I, SPP1) that drive immune evasion.
+  
+  - Differentiate cell states based on their transcriptomic and metabolic profiles (e.g., exhausted vs. effector T-cells).
 
 ### Data processing and quality control
 
-*Filtering and Quality Metrics*
+**Filtering and Quality Metrics**
+
 To ensure the integrity of the downstream analysis, a stringent quality control (QC) pipeline was implemented. Cells were evaluated based on unique molecular identifier (UMI) counts, the number of detected genes, and the proportion of mitochondrial transcripts.
 
 The following filtering criteria were applied:
 
--Only cells with more than 500 and fewer than 6,000 detected genes were retained.
--A threshold of less than 10% mitochondrial UMIs was set to exclude apoptotic or damaged cells.
+  - Only cells with more than 500 and fewer than 6,000 detected genes were retained.
+  - A threshold of less than 10% mitochondrial UMIs was set to exclude apoptotic or damaged cells.
+  
+  **Normalization and Feature Selection**
+
+Following the exclusion of low-quality cells, data normalization was performed using a global-scaling method (LogNormalize). To focus the analysis on biological variation, the top 2,000 highly variable features were identified using the variance-stabilizing transformation (vst) method. Subsequently, data scaling was executed to shift the mean expression to 0 and the variance to 1 for each gene.
+  
+#### Raw Data {.tabset .tabset-pills}
 
 ```{r unprocessed data featureplots}
 mat <- Read10X(data.dir = "sample_filtered_feature_bc_matrix")
@@ -147,10 +161,12 @@ melanoma_raw <- melanoma_raw |>
   PercentageFeatureSet(pattern = "^MT-", col.name = "percent.mt")
 
 VlnPlot(melanoma_raw, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
-FeatureScatter(melanoma_raw, feature1 = "nCount_RNA", feature2 = "percent.mt")
+p_feat_raw <- FeatureScatter(melanoma_raw, feature1 = "nCount_RNA", feature2 = "percent.mt")+ 
+  labs(title = "QC: Feature plot before processing")
+
 ```
-*Normalization and Feature Selection*
-Following the exclusion of low-quality cells, data normalization was performed using a global-scaling method (LogNormalize). To focus the analysis on biological variation, the top 2,000 highly variable features were identified using the variance-stabilizing transformation (vst) method. Subsequently, data scaling was executed to shift the mean expression to 0 and the variance to 1 for each gene.
+
+#### Raw vs processed data {.tabset .tabset-pills}
 
 ```{r processed data featureplots}
 if (!file.exists("processed_data/melanoma_normalized.rds")) {
@@ -163,10 +179,13 @@ saveRDS(melanoma, "processed_data/melanoma_normalized.rds")
 } else {
   melanoma <- readRDS("processed_data/melanoma_normalized.rds")
 }
-melanoma |> 
-  FeatureScatter(feature1 = "nCount_RNA", feature2 = "percent.mt") +
-  theme_bw()
+p_feat_processed <- FeatureScatter(feature1 = "nCount_RNA", feature2 = "percent.mt")+ 
+  labs(title = "QC: Feature plot after processing"")
+
+p_feat_raw + p_feat_processed
 ```
+
+#### QC stats {.tabset .tabset-pills}
 
 To evaluate the technical quality of the sequencing run, key metrics were summarized. The high median gene count per cell and substantial sequencing depth suggest a high-complexity library suitable for resolving subtle cellular states.
 
@@ -201,6 +220,7 @@ knitr::kable(
   table.attr = 'class="table table-hover" style="width: 80%;"'
 )
 ```
+### { - .unlisted}
 
 ### Dimensionality Reduction {.tabset .tabset-pills}
 
@@ -514,30 +534,28 @@ p2 + p3
 #### Lineage trajectories
 
 ```{r cell cycle}
-if (!file.exists("processed_data/cell_cycle.rds")) {
+if (!file.exists("processed_data/cell_cycle_cds.rds")) {
 cds <- as.cell_data_set(melanoma)
 cds <- cluster_cells(cds, reduction_method = "UMAP")
 cds <- learn_graph(cds, use_partition = TRUE)
-get_roots_per_partition <- function(cds) {
-  parts <- unique(partitions(cds))
-  root_cells <- c()
-  
-  for (p in parts) {
-    cell_id <- which(partitions(cds) == p)[1]
-    root_cells <- c(root_cells, names(cell_id))
-  }
-  return(root_cells)
+
+cell_partitions <- partitions(cds)
+unique_parts <- unique(cell_partitions)
+all_root_cells <- c()
+
+for (p in unique_parts) {
+  idx <- which(cell_partitions == p)[1]
+  cell_name <- names(cell_partitions)[idx]
+  all_root_cells <- c(all_root_cells, cell_name)
 }
 
 cds <- order_cells(cds, 
                    reduction_method = "UMAP", 
-                   root_cells = get_roots_per_partition(cds))
-
-saveRDS(final_mat, "processed_data/cell_cycle.rds")
+                   root_cells = all_root_cells)
+saveRDS(cds, "processed_data/cell_cycle_cds.rds")
 } else {
-  cds <- readRDS("processed_data/cell_cycle.rds")
+  cds <- readRDS("processed_data/cell_cycle_cds.rds")
 }
-
 colData(cds)$cell_type <- melanoma$cell_type
 
 p4 <- plot_cells(cds, 
@@ -553,6 +571,7 @@ p5 <- plot_cells(cds,
                  label_leaves = FALSE, 
                  graph_label_size = 0) + 
   theme_minimal()
+
 p4 + p5
 ```
 
@@ -741,8 +760,8 @@ melanoma.rank <- subsetCommunication(cellchat, sources.use = "Melanocytes") |>
   aggregate(prob ~ pathway_name, data = _, sum) |>
   (\(df) df[order(df$prob, decreasing = TRUE), ])()
 knitr::kable(
-  melanoma.rank, 
-  caption = "Table 4: Top signaling pathways of melanoma",
+  melanoma.rank[-1],
+  caption = "Top signaling pathways of melanoma",
   col.names = c("Signaling pathway", "Score"),
   align = "lcc",
   format = "html",
