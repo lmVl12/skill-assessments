@@ -1,0 +1,505 @@
+---
+title: "Caki-1 Transcriptome or Gene expression"
+self_contained: true
+output:
+  html_document:
+    theme: lumen        
+    highlight: tango     
+    toc: true            
+    toc_float: true
+    code_folding: hide 
+    number_sections: false     
+    df_print: paged   
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  message = FALSE,
+  warning = FALSE,
+  fig.width = 10,
+  fig.height = 7,
+  fig.align = "center",
+  out.width = "100%"
+)
+```
+
+```{css, echo=FALSE}
+/*Custom tab appearence */ 
+.tab-content {
+    border: 1px solid #e0e0e0; 
+    border-top: none;          
+    padding: 20px;             
+    background-color: #fcfcfc; 
+    border-radius: 0 0 10px 10px; 
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05); 
+    margin-bottom: 30px;  
+    min-height: 700px;  
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+}
+.nav-pills > li.active > a {
+    font-weight: bold;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+body {
+    font-size: 16px; 
+    line-height: 1.6;
+    text-align: justify;
+}
+h1, h2, h3, .nav-pills {
+    text-align: left;
+}
+
+h1, h2, h3 {
+    font-weight: bold;
+    color: #2c3e50;
+}
+```
+
+### Introduction
+
+**Project Background and Objectives.** Hypoxia is a hallmark of the microenvironment in many solid human tumors, driving significant transcriptomic alterations. Two primary models are employed to simulate these conditions:
+
+- Physiological Hypoxia: Culturing cells in a specialized low-oxygen incubator.  
+- Chemical Mimicry: Treatment with Cobalt Chloride (CoCl<sub>2</sub>), which chemically stabilizes HIF-1 alpha. 
+
+This study involves a re-analysis of RNA-seq data from human Caki-1 cells (clear cell renal cell carcinoma) to evaluate the transcriptomic fidelity of CoCl<sub>2</sub> as a hypoxia mimetic. 
+
+**Data Source.** The raw transcriptomic data used in this analysis were retrieved from the NCBI BioProject database via the recount2 accession number SRP066934.
+
+### Setup and Data import
+
+```{r upload and inspect data, results='hide'}
+# Library imports
+library(tidyverse)
+library(DESeq2)
+library(EnsDb.Hsapiens.v86)
+library(EnhancedVolcano)
+library(dplyr)
+library(ggplot2)
+library(ggplotify)
+library(pheatmap)
+library(apeglm)
+library(msigdbr)
+library(ggpubr)
+library(clusterProfiler)
+library(enrichplot)
+library(DT)
+library(patchwork)
+
+# Read and inspect the dataset
+load("rse_gene.Rdata")
+rse <- rse_gene
+mapping <- data.frame(
+  run = c(
+    "SRR2970559",
+    "SRR2970560",
+    "SRR2970562",
+    "SRR2970566",
+    "SRR2970569",
+    "SRR2970570",
+    "SRR2970573",
+    "SRR2970575",
+    "SRR2970578"
+  ),
+  cond = c(rep("Untreated", 3), rep("CoCl2", 3), rep("Hypoxia", 3))
+)
+rse$condition <- factor(rep(c("Untreated", "CoCl2", "Hypoxia"), each = 3),
+  levels = c("Untreated", "Hypoxia", "CoCl2")
+)
+as.data.frame(colData(rse)[, c("run", "condition")])
+# make the gene names readable for annotation
+rownames(rse) <- gsub(pattern = "\\..+", replacement = "", x = rownames(rse))
+all(assay(rse) == floor(assay(rse))) # check if counts are integers
+all(rownames(colData(rse)) == colnames(assay(rse))) # check if the metadata match count matrix
+colData(rse) <- colData(rse)[, c("sample", "run", "condition")] # select data for analysis
+rse$condition <- relevel(rse$condition, ref = "Untreated") # assign the control factor explicitly
+```
+
+The detailed sample information was retrieved from the SRA database using the corresponding accession numbers. Samples were categorized into three groups and the "Untreated" state (cells cultured under standard atmospheric O<sub>2</sub> levels without chemical additives) was formally assigned as the baseline for all differential expression comparisons.
+
+### Exploratory Data Analysis {.tabset .tabset-pills}
+
+To ensure reliable analysis, raw counts were normalized using Variance Stabilizing Transformation (VST). This minimizes the impact of sequencing depth differences and stabilizes variance across the dataset.
+
+#### PCA Plot
+
+The PCA plot visualizes the global transcriptomic relationships between samples: 
+
+-   Biological replicates for each condition cluster tightly, confirming experimental consistency. 
+-   The largest source of variance (PC1- 70 %) clearly separates both treated groups (Hypoxia and CoCl<sub>2</sub>) from the Untreated control. 
+-   The clear distance between Hypoxia and CoCl<sub>2</sub> on the plot is the first evidence that chemical mimicry does not perfectly replicate the physiological response.
+
+```{r normalization&PCA}
+# Normalization
+dds <- DESeqDataSet(rse, design = ~condition)
+keep <- rowSums(counts(dds)) >= 10
+dds <- dds[keep, ]
+vsd <- vst(dds, blind = FALSE)
+
+# PCA
+pcaData <- plotPCA(vsd, intgroup = "condition", returnData = TRUE)
+percentVar <- round(100 * attr(pcaData, "percentVar"))
+
+ggplot(pcaData, aes(x = PC1, y = PC2, color = condition, label = name)) +
+  geom_point(size = 5) +
+  xlab(paste0("PC1 - ", percentVar[1], "%")) +
+  ylab(paste0("PC2 - ", percentVar[2], "%")) +
+  theme_classic(base_size = 18) +
+  ggtitle("Caki-1") +
+  theme(plot.title = element_text(size = 22, face = "bold"))
+```
+
+
+#### MA Plot
+
+The MA plots visualize the scale of transcriptomic shifts: 
+
+-   Lots of genes are significantly affected in both models.
+-   CoCl<sub>2</sub> treatment triggers a higher number of upregulated genes and more extreme fold-changes than real hypoxia. 
+-   Although the CoCl<sub>2</sub> response is "stronger" in magnitude, this increased intensity suggests the activation of additional stress pathways beyond standard hypoxia signaling.
+
+```{r DESeq and MA plot}
+dds <- DESeq(dds)
+res_real_hypoxia <- results(dds, contrast = c("condition", "Hypoxia", "Untreated"))
+resNorm_real_hypoxia <- lfcShrink(
+  dds = dds,
+  coef = "condition_Hypoxia_vs_Untreated",
+  type = "apeglm"
+)
+
+res_chemical_hypoxia <- results(dds, contrast = c("condition", "CoCl2", "Untreated"))
+resNorm_chemical_hypoxia <- lfcShrink(
+  dds = dds,
+  coef = "condition_CoCl2_vs_Untreated",
+  type = "apeglm"
+)
+par(mfrow = c(1, 2))
+common_ylim <- c(-2.5, 2.5)
+plotMA(resNorm_real_hypoxia, main = "Real Hypoxia", ylim = common_ylim)
+plotMA(resNorm_chemical_hypoxia, main = bquote(bold("Chemical Hypoxia (" * CoCl[2] * ")")), ylim = common_ylim)
+par(mfrow = c(1, 1))
+```
+
+
+###  {.unnumbered .unlisted}
+
+
+### Differentially expressed genes {.tabset .tabset-pills}
+
+#### Volcano plot
+
+The Volcano plot provides a global overview of the relationship between statistical significance (-log<sub>10</sub> P<sub>adj</sub>) and the magnitude of change (log<sub>2</sub> Fold Change).
+
+```{r volcano plot}
+# Global settings
+p_adj_cut <- 0.01
+lfc_cut <- 1
+base_mean_cut <- 20
+
+# Annotation
+ens2sym <- AnnotationDbi::select(EnsDb.Hsapiens.v86,
+  keys = keys(EnsDb.Hsapiens.v86),
+  columns = c("SYMBOL")
+)
+
+resdf_real_hypoxia <- as.data.frame(resNorm_real_hypoxia) |>
+  rownames_to_column() |>
+  mutate(GENEID = gsub(rowname, pattern = "\\..+", replacement = "")) |>
+  dplyr::select(-rowname) |>
+  inner_join(y = ens2sym, by = "GENEID")
+
+resdf_chemical_hypoxia <- as.data.frame(resNorm_chemical_hypoxia) |>
+  rownames_to_column() |>
+  mutate(GENEID = gsub(rowname, pattern = "\\..+", replacement = "")) |>
+  dplyr::select(-rowname) |>
+  inner_join(y = ens2sym, by = "GENEID")
+
+p1 <- EnhancedVolcano(resdf_real_hypoxia,
+  lab = resdf_real_hypoxia$SYMBOL,
+  x = "log2FoldChange", y = "padj",
+  pCutoff = p_adj_cut, FCcutoff = 2,
+  title = "Real Hypoxia",
+  subtitle = NULL,
+  caption = NULL,
+  gridlines.major = FALSE, gridlines.minor = FALSE,
+  border = "full",
+  legendPosition = "none"
+)
+
+# Chemical Hypoxia
+p2 <- EnhancedVolcano(resdf_chemical_hypoxia,
+  lab = resdf_chemical_hypoxia$SYMBOL,
+  x = "log2FoldChange", y = "padj",
+  pCutoff = p_adj_cut, FCcutoff = 2,
+  title = bquote(bold("Chemical Hypoxia (" * CoCl[2] * ")")),
+  subtitle = NULL,
+  gridlines.major = FALSE, gridlines.minor = FALSE,
+  border = "full"
+)
+
+# Join with one legend
+(p1 | p2) +
+  plot_layout(guides = "collect") &
+  theme(legend.position = "bottom")
+```
+
+-   Real Hypoxia shows a focused and physiological response. HMOX1 (Heme Oxygenase 1), a classic marker of oxygen deprivation and antioxidant defense, is among the most significantly upregulated genes.
+-   Chemical Hypoxia (CoCl<sub>2</sub>) exhibits a much more intense and "crowded" profile. The top-ranked genes, such as PPP1R15A and GADD45B, are primarily associated with DNA damage and growth arrest. CoCl<sub>2</sub> treatment reaches substantially higher levels of statistical significance, indicating a more aggressive and potentially toxic cellular impact compared to real hypoxia.
+-   The divergence in top-labeled genes confirms that while both conditions trigger transcriptomic shifts, they do so through different primary mechanisms.
+
+#### Top Significant DEGs
+
+```{r}
+sig_res_real <- resdf_real_hypoxia |>
+  filter(padj < p_adj_cut & abs(log2FoldChange) >= lfc_cut & baseMean >= base_mean_cut)
+
+sig_res_chemical <- resdf_chemical_hypoxia |>
+  filter(padj < p_adj_cut & abs(log2FoldChange) >= lfc_cut & baseMean >= base_mean_cut)
+
+# find top DEGs for both conditions
+top_real_names <- sig_res_real |>
+  arrange(padj) |>
+  head(20) |>
+  pull(SYMBOL)
+top_chem_names <- sig_res_chemical |>
+  arrange(padj) |>
+  head(20) |>
+  pull(SYMBOL)
+
+# find common unique top DEGs
+all_top_genes <- unique(c(top_real_names, top_chem_names))
+
+# join the top genes into common table to compare
+comparison_table <- resdf_real_hypoxia |>
+  filter(SYMBOL %in% all_top_genes) |>
+  dplyr::select(SYMBOL, LFC_Real = log2FoldChange, padj_Real = padj) |>
+  inner_join(
+    resdf_chemical_hypoxia |> dplyr::select(SYMBOL, LFC_Chem = log2FoldChange, padj_Chem = padj),
+    by = "SYMBOL"
+  )
+
+# display one table
+datatable(comparison_table,
+  colnames = c("Gene Symbol", "LFC Real Hypoxia", "padj Real hypoxia", "LFC Chemical hypoxia", "padj Chemical hypoxia"),
+  rownames = FALSE,
+  options = list(
+    pageLength = 10,
+    scrollX = TRUE
+  )
+) |>
+  formatRound(columns = c("LFC_Real", "LFC_Chem"), digits = 3) |>
+  formatSignif(columns = c("padj_Real", "padj_Chem"), digits = 3) |>
+  # Додає кольорові бари прямо в комірки LFC
+  formatStyle(c("LFC_Real", "LFC_Chem"),
+    backgroundColor = styleInterval(0, c("#B8F4FF", "#FFB8B8"))
+  )
+```
+
+To evaluate the overlap between the two models, the top 20 most significant genes (P<sub>adj</sub>) from each condition were cross-referenced. This resulted in a combined list of 37 unique genes, indicating a remarkably low overlap of only 3 shared genes among the top candidates. 
+-   The minimal overlap in top DEGs suggests that while both treatments are potent, they activate largely divergent primary transcriptomic programs. 
+-   The magnitude (log<sub>2</sub> FC) and the direction of change (indicated by color) often differs significantly, with CoCl<sub>2</sub> typically inducing more extreme shifts.
+
+#### Expression Heatmap
+
+```{r heatmap, fig.height=5, fig.width=7}
+# Choose the significant genes by major contrast (real hypoxia)
+sig_res <- resdf_real_hypoxia |>
+  filter(padj < p_adj_cut & baseMean >= base_mean_cut)
+
+sig_ordered <- sig_res |> arrange(padj)
+# Selecting the top 10 over- and under-expressed DEGs prioritized by statistical significance
+# (lowest padj) to ensure robust expression patterns across replicates.
+top_10_over <- sig_ordered |>
+  filter(log2FoldChange > 0) |>
+  head(10)
+
+top_10_under <- sig_ordered |>
+  filter(log2FoldChange < 0) |>
+  head(10)
+
+# Combine over- and underexpressed genes
+hm_genes_id <- c(top_10_over$GENEID, top_10_under$GENEID)
+hm_genes_symbols <- c(top_10_over$SYMBOL, top_10_under$SYMBOL)
+
+# Prepare the matrix
+mat_final <- assay(vsd)[hm_genes_id, ]
+rownames(mat_final) <- hm_genes_symbols
+
+
+pheatmap(mat_final,
+  scale = "row",
+  cluster_cols = FALSE,
+  annotation_col = as.data.frame(colData(vsd)[, "condition", drop = FALSE]),
+  main = "Top 10 over- and 10 underexpressed DEGs",
+  cellwidth = 30,
+  cellheight = 12
+)
+```
+
+Heatmap reveals two primary gene blocks: a top cluster of genes downregulated in physical hypoxia and a bottom cluster of genes upregulated across both treatment groups. While CoCl<sub>2</sub> effectively induces common hypoxia markers like HMOX1 and DDIT4, it fails to replicate the gene repression (blue areas) observed in the physical hypoxia samples. Stress-related genes (HSPA1A/B) show significantly higher expression levels (darker red) in the CoCl<sub>2</sub> group compared to the physical hypoxia group.
+
+###  {.unnumbered .unlisted}
+
+### GSEA: Significantly enriched pathways {.tabset .tabset-pills}
+
+#### Table
+
+```{r GSEA table}
+# load KEGG pathways
+kegg_sets <- msigdbr(species = "Homo sapiens", category = "C2", subcategory = "CP:KEGG_LEGACY") |>
+  dplyr::select(gs_name, gene_symbol)
+
+# Rank
+ranks_real <- as.data.frame(res_real_hypoxia) |>
+  rownames_to_column("GENEID") |>
+  mutate(GENEID = gsub(GENEID, pattern = "\\..+", replacement = "")) |>
+  inner_join(ens2sym, by = "GENEID") |>
+  filter(!is.na(stat) & !is.na(SYMBOL)) |>
+  distinct(SYMBOL, .keep_all = TRUE) |>
+  arrange(desc(stat)) |>
+  dplyr::select(SYMBOL, stat) |>
+  deframe()
+
+ranks_chem <- as.data.frame(res_chemical_hypoxia) |>
+  rownames_to_column("GENEID") |>
+  mutate(GENEID = gsub(GENEID, pattern = "\\..+", replacement = "")) |>
+  inner_join(ens2sym, by = "GENEID") |>
+  filter(!is.na(stat) & !is.na(SYMBOL)) |>
+  distinct(SYMBOL, .keep_all = TRUE) |>
+  arrange(desc(stat)) |>
+  dplyr::select(SYMBOL, stat) |>
+  deframe()
+
+# Launch GSEA
+gsea_real <- GSEA(ranks_real, TERM2GENE = kegg_sets, pvalueCutoff = 1, verbose = FALSE)
+gsea_chem <- GSEA(ranks_chem, TERM2GENE = kegg_sets, pvalueCutoff = 1, verbose = FALSE)
+
+# Combine into one interactive table by 'Condition'
+gsea_combined <- bind_rows(
+  as.data.frame(gsea_real) |> mutate(Condition = "Real hypoxia"),
+  as.data.frame(gsea_chem) |> mutate(Condition = "Chemical hypoxia")
+)
+
+top_combined_clean <- gsea_combined |>
+  group_by(Condition) |>
+  slice_min(order_by = p.adjust, n = 5, with_ties = FALSE) |>
+  ungroup() |>
+  dplyr::select(Condition, Description, everything(), -ID, -core_enrichment, -leading_edge)
+
+datatable(top_combined_clean,
+  filter = "top",
+  rownames = FALSE,
+  options = list(
+    pageLength = 10,
+    scrollX = TRUE,
+    autoWidth = TRUE,
+    columnDefs = list(
+      list(className = "dt-nowrap", targets = "_all"),
+      list(width = "300px", targets = 1)
+    )
+  ),
+  caption = "Top 5 KEGG Pathways per Condition"
+) |>
+  formatRound(columns = c("enrichmentScore", "NES"), digits = 3) |>
+  formatSignif(columns = c("pvalue", "p.adjust", "qvalue"), digits = 3)
+```
+
+#### Plot
+
+```{r GSEA plot}
+# Data for the plot - TOP 5 by lowest p.adjust
+top_paths <- gsea_combined |>
+  group_by(Condition) |>
+  # Вибираємо топ-5 саме за значущістю (p.adjust)
+  slice_min(order_by = p.adjust, n = 5, with_ties = FALSE) |>
+  pull(ID) |>
+  unique()
+
+gsea_plot_df <- gsea_combined |>
+  filter(ID %in% top_paths) |>
+  mutate(
+    NES = as.numeric(NES),
+    p.adjust = as.numeric(p.adjust),
+    Count = as.numeric(setSize)
+  )
+
+# Тепер малюємо ggplot
+ggplot(gsea_plot_df, aes(x = NES, y = reorder(Description, NES))) +
+  geom_point(aes(size = Count, color = p.adjust)) +
+  scale_color_gradient(
+    low = "#e41a1c", high = "#377eb8",
+    name = expression(P[adj]),
+    trans = "log10",
+    breaks = c(1e-7, 1e-5, 1e-3, 1e-1)
+  ) +
+  scale_size_continuous(name = "Gene Count", range = c(3, 10)) +
+  facet_grid(. ~ Condition) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "gray50") +
+  theme_bw() +
+  theme(strip.text = element_text(size = 12, face = "bold")) +
+  labs(
+    title = bquote(bold("Top KEGG Pathways: " * CoCl[2] * " vs Real hypoxia ")),
+    subtitle = "Selection based on lowest adjusted p-values (5 for each phenotype)",
+    x = "Normalized Enrichment Score (NES)",
+    y = "KEGG Pathway"
+  )
+```
+
+###  {.unnumbered .unlisted}
+
+While broad categories such as various neurodegenerative disease signatures (e.g., Alzheimer's) and cancer pathways showed high statistical significance, they were not prioritized for detailed analysis. Their enrichment is likely attributed to extensive gene overlap with core mitochondrial respiration and general survival signaling. Instead, the focus was directed toward more granular metabolic and stress-response pathways, which provide a clearer distinction between the physiological hypoxia and chemical stress phenotypes.
+
+
+### Commons and differences between significantly enriched pathways {.tabset .tabset-pills}
+
+#### Ribosome
+
+```{r gseaplots ribosome, fig.height=4}
+p1_a <- gseaplot2(gsea_real, geneSetID = "KEGG_RIBOSOME", title = "Ribosome: Real hypoxia", color = "#E41A1C")
+p1_b <- gseaplot2(gsea_chem, geneSetID = "KEGG_RIBOSOME", title = "Ribosome: Chemical hypoxia", color = "#377EB8")
+panel_ribo <- ggarrange(as.ggplot(p1_a), as.ggplot(p1_b), ncol = 2)
+plot_ribo <- ggarrange(panel_ribo, nrow = 1)
+
+print(plot_ribo)
+```
+Both conditions exhibited a robust and nearly identical enrichment of the KEGG_RIBOSOME pathway. 
+This indicates a shared cellular strategy to manage stress by modulating protein synthesis and translational machinery.
+
+#### Glycolysis and propanoate metabolism
+
+```{r gseaplots glycolysis & propanoate metabolism, fig.height=8}
+p2_a <- gseaplot2(gsea_real, geneSetID = "KEGG_GLYCOLYSIS_GLUCONEOGENESIS", title = "Glycolysis: Real hypoxia", color = "#E41A1C")
+p2_b <- gseaplot2(gsea_chem, geneSetID = "KEGG_GLYCOLYSIS_GLUCONEOGENESIS", title = "Glycolysis: Chemical hypoxia", color = "#377EB8")
+panel_glyc <- ggarrange(as.ggplot(p2_a), as.ggplot(p2_b), ncol = 2)
+
+p3_a <- gseaplot2(gsea_real, geneSetID = "KEGG_PROPANOATE_METABOLISM", title = "Carbonic Acids: Real hypoxia", color = "#E41A1C")
+p3_b <- gseaplot2(gsea_chem, geneSetID = "KEGG_PROPANOATE_METABOLISM", title = "Carbonic Acids: Chemical hypoxia", color = "#377EB8")
+panel_carb <- ggarrange(as.ggplot(p3_a), as.ggplot(p3_b), ncol = 2)
+
+plot_glyc_carb <- ggarrange(panel_glyc, panel_carb,
+  nrow = 2, labels = c("A", "B")
+)
+
+print(plot_glyc_carb)
+```
+Glycolysis serves as the primary energy source when oxidative phosphorylation is compromised, while Propanoate metabolism provides essential carbon skeletons for the TCA cycle and gluconeogenesis. Their activation is a hallmark of the "hypoxic switch" required for cell survival.
+
+Real hypoxia shows a strong, coordinated activation of both Glycolysis (panel A) and Propanoate metabolism (panel B). This reflects a successful adaptive shift to anaerobic energy production and the mobilization of organic acid intermediates to maintain cellular homeostasis under oxygen-limited conditions. While CoCl<sub>2</sub> exhibits a markedly different profile with weak response or systemic suppression (negative enrichment) of these pathways. This indicates that chemical induction fails to trigger the compensatory metabolic program characteristic of true physiological hypoxia.
+
+#### Amino Acids metabolism
+
+```{r gseaplots amino acids, fig.height=4}
+p4_a <- gseaplot2(gsea_real, geneSetID = "KEGG_VALINE_LEUCINE_AND_ISOLEUCINE_DEGRADATION", title = "Amino Acids: Real hypoxia", color = "#E41A1C")
+p4_b <- gseaplot2(gsea_chem, geneSetID = "KEGG_VALINE_LEUCINE_AND_ISOLEUCINE_DEGRADATION", title = "Amino Acids: Chemical hypoxia", color = "#377EB8")
+panel_amino <- ggarrange(as.ggplot(p4_a), as.ggplot(p4_b), ncol = 2)
+
+plot_amino <- ggarrange(panel_amino, nrow = 1)
+
+print(plot_amino)
+```
+CoCl<sub>2</sub> treatment specifically induced alterations in the KEGG_VALINE_LEUCINE_AND_ISOLEUCINE_DEGRADATION pathway, which remained unaffected in real hypoxia. This enrichment likely reflects a secondary "chemical footprint" related to metal-induced toxicity rather than hypoxic signaling.
+
+###  {.unnumbered .unlisted}
