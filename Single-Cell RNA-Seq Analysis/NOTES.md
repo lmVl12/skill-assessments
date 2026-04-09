@@ -35,3 +35,10 @@ The analysis is implemented in **R (RMarkdown)** using a bioinformatics stack:
 * **R** (>= 4.2)
 * **Python** (Required for PHATE/MAGIC via `reticulate`)
 * **Required R Packages:** `Seurat`, `CellChat`, `monocle3`, `SingleR`, `phateR`, `tidyverse`, `patchwork`.
+
+## Interactive Analysis Report
+Click the link below to view the full interactive research report with all visualizations and cluster annotations:
+
+> ### [**View Full Interactive Report**](https://lmvl12.github.io/skill-assessments/Single-Cell%20RNA-Seq%20Analysis/Single-Cell-RNA-Seq.html)
+
+
