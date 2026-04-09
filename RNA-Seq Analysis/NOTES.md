@@ -86,3 +86,8 @@ BiocManager::install(c("DESeq2", "clusterProfiler", "EnhancedVolcano", "msigdbr"
 
 \* \*\*EwS.rds\*\*: Input transcriptomic data (RangedSummarizedExperiment format).
 
+**Interactive Analysis Report**
+Click the link below to view the full interactive research report:
+
+> [**View Full Interactive Report**](https://lmvl12.github.io/skill-assessments/RNA-Seq%20Analysis/Ewing_sarcoma.html)
+
