@@ -27,6 +27,13 @@ knitr::opts_chunk$set(
 
 
 ```{css, echo=FALSE}
+.main-container {
+    max-width: 70% !important;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 40px;  
+    padding-right: 40px;
+}
 /*Custom tab appearence */ 
 .tab-content {
     border: 1px solid #e0e0e0; 
@@ -46,7 +53,7 @@ knitr::opts_chunk$set(
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 body {
-    font-size: 16px; 
+    font-size: 20px; 
     line-height: 1.6;
     text-align: justify;
 }
@@ -81,12 +88,6 @@ library(CellChat)
 library(ggalluvial)
 library(DT)
 library(kableExtra)
-reticulate::py_require(c("magic-impute", "phate"))
-reticulate::py_config()
-if (!reticulate::py_module_available("phate") |
-  !reticulate::py_module_available("magic")) {
-  reticulate::py_install(c("magic-impute", "phate"), pip = TRUE)
-}
 ```
 
 ### **Introduction**
@@ -338,16 +339,16 @@ The spatial distribution maps for all candidate markers were exported to a dedic
 #### Cell marker visualization 
 
 To validate lineage commitment, canonical markers for immune and malignant populations were visualized across all clusters.
-```{r marker IDs violin plots, out.width="60%", results='markup'}
+```{r marker IDs violin plots, out.width="50%", results='markup'}
 marker_list_melanoma <- list(
-  "Neurons/tumor" = c("SYN3", "NETO1"),
+  "Neurons" = c("SYN3", "NETO1"),
   "T cells" = c("CD40LG"),
   "CTLA" = c("BTNL9", "CD80"),
   "Granulosa cells/pro-inflammatory" = c("ANKS1B", "ICA1", "TOX2"),
   "NK" = c("NKG7"),
   "Macrophages" = c("CD163"),
   "Plasma cells" = c("IGHG3", "IGHGP"),
-  "Endothelial/melanocytes" = c("EDN3")
+  "Melanocytes" = c("EDN3", "MLANA")
 )
 marker_vln <- function(srt, marker_list, group_name) {
   genes <- marker_list[[group_name]]
@@ -359,7 +360,7 @@ vlnList <- lapply(names(marker_list_melanoma), marker_vln,
   srt = melanoma, marker_list = marker_list_melanoma
 )
 final_ga <- ggarrange(plotlist = vlnList, ncol = 1)
-ggsave(final_ga, filename = "melanoma_validation_violins.png", height = 25, width = 15)
+ggsave(final_ga, filename = "melanoma_validation_violins.png", height = 30, width = 20)
 
 knitr::include_graphics("melanoma_validation_violins.png")
 ```
@@ -376,7 +377,7 @@ The consolidated visualization of lineage-specific expression is available for h
 
 - Immune Infiltration: Clear segregation of T cells (CD40LG), NK cells (NKG7), and Macrophages (CD163) indicates a complex and heterogeneous immune landscape.
 
-- Potential "Dynamic" States: Several clusters (marked with * in final IDs) exhibit overlapping markers or intermediate expression levels, suggesting a continuum of cell states rather than discrete categories.
+- Potential "Dynamic" States: Several clusters exhibit overlapping markers or intermediate expression levels, suggesting a continuum of cell states rather than discrete categories.
 
 ### Automated reference mapping {.tabset .tabset-pills}
 
@@ -458,9 +459,12 @@ pmif <- plotScoreHeatmap(pred.mimd.fine,
   annotation_legend = TRUE
 )
 pdf("Cluster_Markers_auto.pdf", width = 20, height = 14)
-print(pbp)
-print(pmim)
-print(pmif)
+plots_list <- list(pbp, pmim, pmif)
+
+for (i in seq_along(plots_list)) {
+  grid::grid.newpage()
+  print(plots_list[[i]])
+}
 dev.off()
 ```
 
@@ -472,14 +476,12 @@ Detailed results of identificaion are available for download [Cluster markers he
 conf_table <- table(melanoma$predicted_id, melanoma$seurat_clusters)
 DT::datatable(
   as.data.frame.matrix(conf_table),
-  caption = "Table 3: Seurat Clusters vs. SingleR predicted IDs",
+  caption = "Clusters vs. Predicted IDs",
   options = list(pageLength = 10, scrollX = TRUE)
 )
 ```
 
 ### { - .unlisted}
-
-From this perspective it is quite clear that cluster 11 contains melanocytes (tumor) and all other clusters are the immune microenvironment.
 
 ### **Cellular dynamics and states** {.tabset .tabset-pills}
 
@@ -488,16 +490,16 @@ From this perspective it is quite clear that cluster 11 contains melanocytes (tu
 ```{r umap}
 Idents(melanoma) <- melanoma$seurat_clusters
 initial_ids <- c(
-  "0" = "Naive B cells",
-  "1" = "Naive CD4 T cells state 1",
+  "0" = "Naive/ activated B cells",
+  "1" = "Activated CD4 T cells",
   "2" = "Non-switched memory B cells",
-  "3" = "Naive CD4 T cells state 2",
+  "3" = "CD4 T cells early development",
   "4" = "Switched memory B cells",
   "5" = "T regulatory cells",
   "6" = "Unknown mixed cluster",
-  "7" = "Naive CD8 T cells",
-  "8" = "Vd2 gd T cells",
-  "9" = "Myeloid DC",
+  "7" = "CD8+ / T-killer cells",
+  "8" = "Cytotoxic CD8+ Memory/ Effector and Vd2 gd T cells",
+  "9" = "Myeloid antigen-presenting cells (macrophages/DC)",
   "10" = "Plasma cells",
   "11" = "Melanocytes",
   "12" = "Plasmacytoid DC"
@@ -528,18 +530,18 @@ melanoma[["phate_magic"]] <- CreateDimReducObject(
   assay = "RNA"
 )
 my_cols <- c(
-  "Naive B cells" = "#1F78B4",
+  "Naive/ activated B cells" = "#1F78B4",
   "Plasma cells" = "#A6CEE3",
   "Switched memory B cells" = "#33A02C",
   "Non-switched memory B cells" = "#B2DF8A",
   "Unknown mixed cluster" = "#1c9099",
-  "Naive CD4 T cells state 1" = "#E31A1C",
-  "Naive CD4 T cells state 2" = "#800026",
-  "Naive CD8 T cells" = "#FB9A99",
+  "Activated CD4 T cells" = "#E31A1C",
+  "CD4 T cells early development" = "#800026",
+  "CD8+ / T-killer cells" = "#FB9A99",
   "T regulatory cells" = "#FF7F00",
-  "Vd2 gd T cells" = "#FDBF6F",
+  "Cytotoxic CD8+ Memory/ Effector and Vd2 gd T cells" = "#FDBF6F",
   "Melanocytes" = "#CAB2D6",
-  "Myeloid DC" = "#6A3D9A",
+  "Myeloid antigen-presenting cells (macrophages/DC)" = "#6A3D9A",
   "Plasmacytoid DC" = "#FFFF99"
 )
 
@@ -674,29 +676,47 @@ The consolidated visualization of activated metabolic pathways is available for 
 
 ### { - .unlisted}
 
-**Key Findings:**
+### Key Findings {.tabset .tabset-pills}
 
-- The T-cell, B-cell, and dendritic cell populations are clearly distinct, with the melanocyte cluster also forming a separate group.
+Clusters are defined by cell type, not cycle artifacts.
 
-- One specific B-cell cluster is particularly noteworthy as it is positioned away from the others; it expresses a set of exhausted B-cell markers absent in other clusters, potentially indicating a hidden communication axis with the melanoma. 
+#### B-cell Line Clusters
 
-- Fully identifying sub-populations remains challenging because this map captures a 'dynamic cell transformation' process.
+**Cluster 0** - clearly identified as naive B cells. Indeed, the activity of the TCF3 factor maintains the cell in this state; however, BCR signaling and active IFN-gamma indicate that these cells are actively responding to external stimuli. Ribosome synthesis points toward active growth and preparation for proliferation, while active Allograft rejection suggests that the inflammatory cascade has been initiated.
+Cluster 2 - consists primarily of CD19+ memory B cells (non-switched), which are already in a functional state. Trajectory analysis indicates a direct origin of these cells from Cluster 0. The TNF-alpha signaling pathways and the interferon response are activated in these cells.
 
-- Clusters are defined by cell type, not cycle artifacts.
+**Cluster 4** originates from Cluster 2 and express the CD80 marker; these cells also feature the IRF8 factor, identifying them as antigen-presenting cells. The active Intestinal immune network for IgA production pathway may play a role in the transformation of these cells into plasma cells. The presence of Allograft rejection, the interferon response, and RELA (p65) indicates that these cells are responding to cytokines and are situated within an active pro-inflammatory microenvironment.
 
-- Tumor cells are predominantly in G1, indicating a quiescent state at sampling.
+**Cluster 10** – These cells exhibit markers of plasma cells and are metabolically distinct from other B cells. The activation of the Proteasome (KEGG), Unfolded Protein Response (Hallmark), and Oxidative Phosphorylation pathways indicates highly intense metabolic activity.
 
-- The distinct B-cell* cluster suggests a specific functional activation separate from naive/memory pools.
+#### T-cell Line Clusters
 
-- Cluster 1 vs 3. Although both clusters are CD4+ T-cells, they are separated by their activation level and biological "mission": cluster 1 cells are in a state of acute inflammation. A very strong TNF-alpha signaling score (over 20 on the -log_10P scale). Cluster 3 cells are also in the tumor area, but they are receiving "calming" or regulatory signals: the TNF-alpha signal is weaker (around 15), and unique pathways like IL-6/STAT3 and IL-2/STAT5 appear.
+**Cluster 1** contains CD4+ T cells. The mixed profile (comprising both naive cells and T-helper cells) shows that this cluster is actively transitioning between states (cells that have encountered an antigen and are undergoing specialization). The high activity of TNF-alpha and NF-kappaB indicates intensive cellular activation.
 
-- Cluster 6 (Ambiguous B cells): Likely some B-T cell doublets. It lacks a strong B-cell metabolic signature and sits "physically" between B and T islands on the UMAP, suggesting a mixed transcriptional signal.
+**Cluster 3** expresses CD4+ T cell markers and likewise exhibits a mixed profile. However, marker genes such as TGFBR3, TCF3 (E2A), and DEAF1 are characteristic of earlier developmental stages. The high activity of Th17, Th1 and Th2 cell differentiation pathways indicates that these cells have nonetheless committed to a differentiation lineage. While TNF-alpha Signaling via NF-kB is lower than in Cluster 1, the presence of Apoptosis and the p53 Pathway is characteristic of young cells that are sensitive to survival signals
 
-- Cluster 10 (Plasma B cells): A distinct functional lineage. The extreme shift on the UMAP is driven by a metabolic explosion: massive Proteasome activity and Oxidative phosphorylation required for high-intensity antibody production.
+In **Cluster 5**, T-regulatory cells dominate the marker composition, a finding further supported by the extremely high activity of the T cell receptor signaling pathway. This cluster also features the transcriptional regulator FOXP3, along with CTLA4 and TIGIT—a factor that enhances suppressive function. These cells are also characterized by active IL-2/STAT5 Signaling and Allograft Rejection, indicating that they are in an effector state.
 
-- Cluster 8 represents a specialized population of Vd2 gd T-cells and memory CD8+ T-cells that exhibit a hybrid NK-like transcriptional profile and a high readiness for rapid anti-tumor response, as evidenced by the strong enrichment of T-cell receptor signaling and TNF-alpha inflammatory pathways.
+**Cluster 7** consists of CD8 T cells—specifically, T-killer cells. Many cells in this cluster are identified as naive. The activity of IL-2/STAT5 Signaling and Allograft Rejection indicates the proliferation of these cells and their preparation for an immune response. These cells clearly play a key role in the immune response process, as evidenced by the highest number of "incoming" signals from other cells.
 
-- Summary: The clustering is driven by functional shifts (exhaustion, inflammation, and protein secretion) rather than just cell lineage.
+**Cluster 8** likely represents activated cytotoxic T cells (specifically CD8+ Memory/Effector or gamma-delta T cells) with signs of NK-like activity. The activity of GZMK (Granzyme K) and GZMA (Granzyme A)—key cytotoxic proteases—as well as NKG7, indicates an effector state and cytotoxic potency. They interact with antigen-presenting cells and exhibit enhanced cytotoxicity (notably due to CRTAM, a T-cell activation marker). These cells are likely a heterogeneous population with a very similar metabolic profile. The activation of the TNF-alpha Signaling via NF-kB and Allograft Rejection pathways indicates high immunogenic activity.
+
+#### Myeloid Lineage
+
+**Cluster 9** consists of myeloid antigen-presenting cells, most likely macrophages or dendritic cells, exhibiting a classic profile (transcription factor SPI1, CD163, CD14, CD33, CSTA, and S100A9). High levels of Oxidative Phosphorylation, as well as Phagosome and Lysosome activity, indicate intensive energy metabolism directed toward phagocytosis and antigen presentation. The presence of CD163 may suggest that, within the melanoma microenvironment, these macrophages could possess certain suppressive characteristics.
+
+**Cluster 12** consists of plasmacytoid dendritic cells (pDCs), exhibiting highly specific markers for this cell type. The activity of pathways such as Protein processing in endoplasmic reticulum, Unfolded Protein Response (UPR), TNF-alpha Signaling via NF-kB, and Lysosome & Autophagy indicates that these cells are in a state of readiness for rapid response and are actively participating in antigen presentation. The high activity of RUNX1, GATA2, and SPI1 (PU.1) points toward early myeloid and lymphoid differentiation.
+
+#### Melanoma
+
+**Cluster 11** consists of melanocytes expressing the EDN3 and MLANA genes. This tumor is characterized by invasiveness (ADAMTS9) and resistance to apoptosis (NOX4). The cells partially mimic the signatures of progenitor cells or other cell lineages, which is characteristic of melanoma. Metabolic analysis shows that the cells are actively dividing, exchanging signals, and acquiring the capacity for migration and invasion. Tumor cells are predominantly in G1, indicating a quiescent state at sampling.
+
+#### Unidentified
+
+**Cluster 6** deonstrates a contradictory molecular profile, where the high expression of specific genes such as SLC16A10 (an amino acid transporter), DEAF1, and the neuronal marker HOMER1 is combined with an ambiguous cellular annotation that covers both naive B cells (75 cells) and isolated T lymphocytes. Enrichment analysis highlights a combination of pathways—such as Adherens junction, Wnt/beta-catenin signaling, and purine metabolism—that is anomalous for pure immune cells. In the absence of the key tumor marker MLANA, this allows for the interpretation of this group as technical doublets resulting from the adhesion of lymphocytes to cells of a different origin. Alternatively, this cluster may represent dedifferentiated melanoma cells that have activated neuronal programs and stemness signaling cascades during tumor progression, or they could be functionally active immune conjugates characteristic of dense intercellular interaction zones, where the transcriptional profiles of different lineages blend due to the physical attachment of cells during sequencing.
+
+### { - .unlisted}
+
 
 ### Tumor microenvironment signaling {.tabset .tabset-pills}
 
@@ -745,7 +765,7 @@ dev.off()
 ```
 
 
-```{r, results='markup'}
+```{r, results='markup', out.width = "50%"}
 knitr::include_graphics("Signaling_Heatmaps_Combined.png")
 ```
 
@@ -850,3 +870,5 @@ dev.off()
 4. Lahav, R., Suvà, M. L., Rimoldi, D., Patterson, P. H., & Stamenkovic, I. (2004). Endothelin receptor B inhibition triggers apoptosis and enhances angiogenesis in melanomas. Cancer research, 64(24), 8945–8953. https://doi.org/10.1158/0008-5472.CAN-04-1510
 5. Xiong, T. F., Pan, F. Q., & Li, D. (2019). Expression and clinical significance of S100 family genes in patients with melanoma. Melanoma research, 29(1), 23–29. https://doi.org/10.1097/CMR.0000000000000512
 6. TYROBP protein expression summary - The Human Protein Atlas. URL:https://www.proteinatlas.org/ENSG00000011600-TYROBP. Accessed: 2026-04-07
+
+
