@@ -1,0 +1,13 @@
+.Rhistory
+.RData
+.Rproj.user/
+*.Zone.Identifier
+.DS_Store
+*Zone.Identifier
+Machine Learning/submission.csv
+py4ds
+feat/py-prog
+rna-seq
+.venv/
+melanoma_matrix.tar.gz
+sample_filtered_feature_bc_matrix/

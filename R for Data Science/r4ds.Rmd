@@ -1,0 +1,496 @@
+---
+title: "Gapminder analysis"
+output: 
+  html_document:
+    theme: lumen        
+    highlight: tango     
+    toc: true            
+    toc_float: true
+    code_folding: hide 
+    number_sections: true     
+    df_print: paged      
+date: "`r Sys.Date()`"
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, # show code
+  warning = FALSE, # hide warnings
+  message = FALSE, # hide messages
+  fig.align = "center" # alignment of the figures
+)
+```
+```{css, echo=FALSE}
+.html-widget {
+  margin: auto !important;
+  display: block;
+}
+```
+## Technical Framework
+
+### Core libraries
+
+```{r packages}
+library(tidyverse) # Core suite for data manipulation and visualization
+library(plotly) # Dynamic and interactive web-based plots
+library(scales) # Tools for formatting axis labels and legends
+library(naniar) # Specialized tools for missing data analysis
+library(broom) # Converts statistical models into tidy data frames
+library(knitr) # General-purpose tool for dynamic report generation
+library(kableExtra) # Advanced styling for HTML and PDF tables
+library(viridis) # Colorblind-friendly and perceptually uniform palettes
+```
+
+### Dataset acquisition
+
+To simply read the file R has in-built tools, but it can result in a simple data.frame.
+`read_csv` returns a `tibble` (a compact style with auto-defined data types and is faster with the big files)
+
+```{r data read}
+original_data <- read_csv("data/gapminder_clean.csv")
+```
+
+## Global wealth vs. carbon footprint
+
+### Snapshot of 1962: The economic-environmental link
+
+Data for 1962 was extracted and log-transformed to manage crowded areas on the plot. 
+To ensure convenience, axis ticks display the raw data values.
+
+```{r plot 1(Q1)}
+# Data preparation
+filtered_data <- original_data |>
+  filter(Year == 1962) # Extract the subset for 1962
+# Plotting
+plot_1 <- ggplot(
+  filtered_data,
+  aes(
+    x = gdpPercap,
+    y = `CO2 emissions (metric tons per capita)`, # Configure the plot axes
+    text = paste(
+      "Country:", `Country Name`, # Define hover tooltip content
+      "<br>GDP per capita:", dollar(gdpPercap, accuracy = 1),
+      "<br>CO<sub>2</sub>:", round(`CO2 emissions (metric tons per capita)`, 2), "t/capita"
+    )
+  )
+) +
+  geom_point(alpha = 0.6) + # Add scatterplot with semitransparent dots
+  theme_classic()
+# Plot appearance
+ggplotly(plot_1, tooltip = "text") |> # Make interactive
+  layout(
+    title = list(
+      text = "<b>Global correlation between GDP and CO<sub>2</sub> emissions (1962)</b><br><sup>Logarithmic Scale</sup>",
+      x = 0.5 # Add title and subtitle
+    ),
+    xaxis = list( # X-axis formatting and layout
+      type = "log", # log-transform
+      autorange = TRUE, # Enable autozoom
+      title = "GDP per capita", # Axis title
+      tickmode = "auto", # Allow Plotly to optimize axis spacing during zoom
+      nticks = 8, # Max ticks per window
+      tickformat = "$~s", # $ symbol and kilo/mega suffixes for readability
+      exponentformat = "none", # Show full numbers instead of powers of 10
+      # Force Plotly to hide labels if they are about to collide
+      tickangle = 0,
+      automargin = TRUE
+    ),
+    yaxis = list( # Y-axis formatting and layout
+      type = "log",
+      autorange = TRUE,
+      title = "<b> CO<sub>2</sub> emissions</b><br><sup> (t/capita)</sup>",
+      tickmode = "auto",
+      nticks = 6,
+      tickformat = ".1f",
+      exponentformat = "none",
+      automargin = TRUE
+    ),
+    hoverlabel = list(
+      bgcolor = "rgba(50, 50, 50, 0.8)",
+      bordercolor = "rgba(255, 255, 255, 0.8)", # Semitransparent white margin
+      font = list(
+        color = "white", # White text
+        size = 12
+      )
+    ),
+    # Helps prevent the labels from overlapping the plot area
+    margin = list(l = 80, r = 50, b = 80, t = 100)
+  )
+```
+
+A specific data point represents a suspicious outlier, warranting further inspection of the underlying data.
+
+A review of the literature reveals the following findings.
+The spike in Kuwait’s CO₂ emissions in 1962—which reached world-record levels on a per capita basis—was primarily driven by the massive flaring of associated petroleum gas.
+During this period, the country rapidly expanded oil production following its independence (1961), but lacked the infrastructure to capture or utilize the natural gas released during extraction, resulting in it being burned off as waste.
+Because these vast industrial emissions were divided by a relatively small population (358,266 people at the time - according to this data set), the mathematical result was an extreme statistical anomaly that far exceeded the per capita output of even the most industrialized Western nations.
+
+### Quantifying the correlation
+
+To quantify the strength and direction of the linear relationship between GDP per capita and CO₂ emissions, a Pearson correlation test was conducted.
+
+```{r correlation-analysis}
+# Pearson correlation test
+cor_results <- cor.test(
+  filtered_data$gdpPercap,
+  filtered_data$`CO2 emissions (metric tons per capita)`
+)
+
+# Transforming to table
+correlation_table <- tidy(cor_results) |>
+  mutate(p.value = formatC(p.value, format = "e", digits = 2)) |>
+  kable(digits = 3, caption = "Pearson correlation test results")
+
+# Show results
+correlation_table
+```
+
+The high correlation between GDP per capita and CO₂ emissions - `r round(cor_results$estimate, 3)`
+with a low p-value of `r format.pval(cor_results$p.value, digits = 3, eps = .Machine$double.eps)` indicate a statistically significant and strong positive correlation between the variables.
+
+The objective is to identify the specific year in which the correlation between GDP per capita and CO₂ emissions reached its peak. While `cor.test()` provides a more comprehensive statistical output, the simpler `cor()` function is preferred for grouped data processing to efficiently compute and compare coefficients across multiple years.
+
+```{r correlation in groups }
+# Correlation test in groups
+cor_by_year <- original_data |>
+  group_by(Year) |>
+  summarise(
+    correlation = cor(
+      gdpPercap,
+      `CO2 emissions (metric tons per capita)`,
+      use = "complete.obs"
+    ),
+    .groups = "drop"
+  )
+# Find out which year has the strongest correlation
+max_cor_year <- cor_by_year |>
+  filter(correlation == max(correlation)) |>
+  pull(Year)
+```
+
+So, the year with the strongest correlation is `r max_cor_year`.
+Now let's focus and discover this period of time by making simple visualizations
+
+```{r visualization of the cor.test result year}
+# Data Preparation: filtering out entities without continent information.
+data_max_cor <- original_data |>
+  filter(Year == max_cor_year) |>
+  filter(!is.na(continent))
+# Plot setup
+plot_2 <- ggplot(
+  data_max_cor,
+  aes(
+    x = gdpPercap,
+    y = `CO2 emissions (metric tons per capita)`,
+    text = paste(
+      "Country:", `Country Name`,
+      "<br>GDP per capita:", dollar(gdpPercap, accuracy = 1),
+      "<br>CO<sub>2</sub>:", round(`CO2 emissions (metric tons per capita)`, 2), "t/capita",
+      "<br>Population:", label_number(accuracy = 0.1, scale_cut = cut_short_scale())(pop)
+    )
+  )
+) +
+  # Add a third dimension: color by continent, size by population
+  geom_point(aes(size = pop, color = continent), alpha = 0.7, na.rm = TRUE) +
+  theme_classic() +
+  scale_size_continuous(guide = "none") + # Hide the size legend to improve chart readability
+  labs( # Guides
+    color = "Continent"
+  )
+ggplotly(plot_2, tooltip = "text") |> # Make interactive
+  layout(
+    autosize = TRUE,
+    title = list(
+      text = paste0("<b> Global correlation between GDP and CO<sub>2</sub> emissions (", max_cor_year, ")</b><br><sup>Logarithmic Scale</sup>"),
+      font = list(size = 16),
+      x = 0.5 # Add title and subtitle (does not fix the year, so it can be changed)
+    ),
+    xaxis = list( # X-axis formatting and layout
+      type = "log", # log-transform
+      autorange = TRUE, # Enable autozoom
+      title = "GDP per capita", # Axis title
+      tickmode = "auto", # Allow Plotly to optimize axis spacing during zoom
+      nticks = 8, # Max ticks per window
+      tickformat = "$~s", # $ symbol and kilo/mega suffixes for readability
+      exponentformat = "none", # Show full numbers instead of powers of 10
+      # Force Plotly to hide labels if they are about to collide
+      tickangle = 0,
+      automargin = TRUE
+    ),
+    yaxis = list( # Y-axis formatting and layout
+      type = "log",
+      autorange = TRUE,
+      title = "CO<sub>2</sub> emissions<br><sup> (t/capita)</sup>",
+      tickmode = "auto",
+      nticks = 6,
+      tickformat = ".2g",
+      exponentformat = "none",
+      automargin = TRUE
+    ),
+    hoverlabel = list(
+      bgcolor = "rgba(50, 50, 50, 0.8)",
+      bordercolor = "rgba(255, 255, 255, 0.8)", # Semitransparent white margin
+      font = list(
+        color = "white", # White text
+        size = 12
+      )
+    ),
+    # Helps prevent the labels from overlapping the plot area
+    margin = list(l = 80, r = 50, b = 80, t = 100)
+  )
+```
+The visualization above shows the relationship for `r max_cor_year`. Note that the size of each circle reflects the country's population, though the size legend has been omitted for clarity.
+
+## Exploratory data analysis (EDA)
+
+### Continental disparities in energy consumption
+
+**Question 1. What is the relationship between continent and Energy use (kg of oil equivalent per capita)?**
+
+As the independent variable (continent) is categorical, the analysis focuses on identifying significant differences between groups. The dependent variable is quantitative (energy use), and the number of groups exceeds two. Given that we are comparing a single dependent variable across these categories, a one-way ANOVA is the most appropriate statistical test. 
+
+```{r ANOVA}
+# ANOVA test
+res_anova <- aov(`Energy use (kg of oil equivalent per capita)` ~ continent, data = original_data)
+# Transforming to table
+res_anova_t <- tidy(res_anova) |>
+  mutate(
+    statistic = ifelse(is.na(statistic), "", round(statistic, 2)), # Hide NA
+    p.value = ifelse(is.na(p.value), "", formatC(p.value, format = "e", digits = 2))
+  ) |>
+  kable(digits = 3, caption = "ANOVA results")
+# Show results
+res_anova_t
+```
+
+To identify which specific continents differ from one another, a Tukey’s honest significance difference (HSD) test was performed as a post-hoc analysis following the ANOVA.
+```{r Tukey}
+# Tukey's honest significance test (table transformed)
+tukey_data <- TukeyHSD(res_anova) |>
+  tidy()
+tukey_table <- tukey_data |>
+  mutate(adj.p.value = formatC(adj.p.value, format = "e", digits = 2)) |>
+  kable(digits = 3, caption = "Tukey results")
+# Show results
+tukey_table
+
+# Visualize the Tukey test results
+tukey_plot <- tukey_data |>
+  mutate(significant = adj.p.value < 0.05) # set a third dimension for reordering
+ggplot(tukey_plot, aes(x = estimate, y = reorder(contrast, estimate), color = significant)) + # Define plot axes and order of lines(pairwise diff)
+  geom_vline(xintercept = 0, linetype = "solid", color = "grey50") + # Set a significance cut-off vertical line
+  annotate("label",
+    x = 0,
+    y = Inf,
+    label = "No Difference",
+    vjust = 1.5,
+    color = "grey50",
+    fill = "white",
+    label.size = 0.5,
+    fontface = "italic"
+  ) +
+  geom_errorbarh(
+    aes(xmin = conf.low, xmax = conf.high),
+    height = 0.3,
+    size = 1
+  ) + # Define the start and end of each line
+  geom_point(size = 2) + # Plot the "estimate" points for each pair
+  theme_classic() +
+  scale_color_manual(values = c("black", "blue"), guide = "none") + # Define the color theme and guides
+  labs(
+    title = "Pairwise Differences by Continent",
+    subtitle = "Blue indicates significant difference (p < 0.05)",
+    x = "Difference in means", y = ""
+  )
+```
+
+The ANOVA test indicates that the continent is a critical factor for energy consumption levels `r format.pval(res_anova$p.value, digits = 3, eps = .Machine$double.eps)`. A follow-up Tukey test clarified that almost all continents differ significantly from one another, with the exceptions of the Oceania–Europe and Asia–Americas pairs, where energy consumption is statistically similar. However, the ANOVA calculation revealed a substantial amount of excluded data due to missing values. Visual analysis of the missing data structure shows a higher concentration of gaps within the African continent. This likely influences the statistical test results and must be taken into account when interpreting the findings.
+
+```{r missing data plots}
+original_data |>
+  # Filter out NAs
+  filter(!is.na(continent)) |>
+  group_by(continent) |>
+  summarise(
+    pct_missing = mean(is.na(`Energy use (kg of oil equivalent per capita)`)) * 100
+  ) |>
+  # Building a plot
+  ggplot(aes(x = reorder(continent, -pct_missing), y = pct_missing, fill = continent)) +
+  geom_col() +
+  # visuals
+  scale_fill_viridis_d(option = "G", begin = 0.2, end = 0.9) +
+  theme_classic() +
+  theme(legend.position = "none") +
+  labs(
+    title = "Percentage of missing energy consumption Data",
+    subtitle = "Analysis by continent for the selected period",
+    x = "Continent",
+    y = "% of missing values"
+  )
+```
+
+
+### Comparative analysis of import reliance: Europe vs. Asia
+
+**Question 2.Is there a significant difference between Europe and Asia with respect to 'Imports of goods and services (% of GDP)' in the years after 1990?**
+
+This is a classic statistical problem: comparing two groups to determine whether a significant difference exists between them. Our grouping (independent) variable is categorical with exactly two levels. The dependent variable is continuous (interval/ratio).
+
+Following the standard statistical flowchart, the Independent Samples T-test was selected. A key prerequisite for this test is that the data within both groups must follow a normal distribution. To verify this assumption, the Shapiro-Wilk test can be employed. If the p-value is less than 0.05, the null hypothesis of normality is rejected, indicating that the distribution cannot be considered normal.
+
+```{r Shapiro-Wilk for Europe and Asia}
+# Preparing the data
+comparison_df <- original_data |>
+  filter(Year > 1990) |>
+  filter(continent %in% c("Europe", "Asia"))
+
+# # Shapiro-Wilk test results for visualization labels
+p_labels <- comparison_df |>
+  group_by(continent) |>
+  summarise(
+    p_val = shapiro.test(`Imports of goods and services (% of GDP)`)$p.value,
+    # Adding a p-value to each facet
+    label = paste0("p = ", format(p_val, digits = 3))
+  )
+
+# Generate Q-Q plot to check normality
+ggplot(comparison_df, aes(sample = `Imports of goods and services (% of GDP)`)) +
+  stat_qq() +
+  stat_qq_line(color = "red") +
+  # Annotations
+  geom_text(
+    data = p_labels, aes(x = -1.5, y = 150, label = label),
+    inherit.aes = FALSE, color = "blue", size = 4, hjust = 0
+  ) +
+  facet_wrap(~continent) +
+  labs(
+    title = "Shapiro-Wilk normality test: Imports of goods and services (% of GDP) ",
+    x = "Theoretical quantiles",
+    y = "Sample quantiles (%GDP)"
+  ) +
+  theme_bw()
+```
+Both data-sets do not follow a normal distribution (deviations from the reference line are clearly visible at both the lower and upper quantiles), and the p-values are significantly lower than 0.05. Consequently, the non-parametric Mann-Whitney U test (Wilcoxon rank-sum test for independent samples) should be applied to compare the two continents.
+
+```{r Mann-Whitney U test}
+final_test <- wilcox.test(
+  `Imports of goods and services (% of GDP)` ~
+    continent,
+  data = comparison_df
+)
+final_test_table <- final_test |> # Transform to the table
+  tidy() |>
+  kable(digits = 3, caption = "Mann-Whitney U test results")
+# Show results
+final_test_table
+```
+
+The null hypothesis ($H_0$) for the Mann-Whitney U test states that there is no difference between the distributions of imports in Asia and Europe. Given the p-value of 0.787 (considerably higher than the 0.05 threshold), we fail to reject $H_0$, indicating that any observed differences between the two continents are likely due to chance.
+
+```{r boxplot fo import in Europe and Asia}
+ggplot(comparison_df, aes(x = continent, y = `Imports of goods and services (% of GDP)`, fill = continent)) +
+  geom_boxplot(alpha = 0.7) +
+  # Add jitter for clarity
+  geom_jitter(width = 0.2, alpha = 0.3) +
+  labs(
+    title = "Import comparison: Europe vs Asia",
+    subtitle = paste("Wilcoxon test p-value =", round(final_test$p.value, 4)),
+    x = "Continent",
+    y = "Import (% GDP)",
+    caption = "Data after 1990"
+  ) +
+  theme_classic() +
+  theme(legend.position = "none") +
+  scale_fill_brewer(palette = "Accent")
+```
+
+This boxplot confirms the initial hypothesis: Asia has a large number of extreme outliers compared to Europe, which could cause the arithmetic means to differ. However, a comparison of the medians demonstrates just how similar these two distributions actually are.
+
+## Global Demographic Benchmarks
+
+### Population Density Champions
+
+**Question 3. What is the country (or countries) that has the highest Population density (people per sq. km of land area) across all years? (i.e., which country has the highest average ranking in this category across each time point in the dataset?)**
+
+```{r population density leaderboard}
+pop_data <- original_data |>
+  # Hide the missing data
+  filter(!is.na(`Population density (people per sq. km of land area)`)) |>
+  group_by(Year) |>
+  mutate(rank = min_rank(desc(`Population density (people per sq. km of land area)`))) |>
+  ungroup() |>
+  group_by(`Country Name`) |>
+  summarise(
+    average_rank = mean(rank, na.rm = TRUE),
+    total_observations = n()
+  ) |>
+  # Sort according to the average rank
+  arrange(average_rank) |>
+  slice_min(average_rank, n = 10) |>
+  rename(
+    `Average rank` = average_rank,
+    `Total observations` = total_observations
+  )
+kable(pop_data,
+  digits = 3,
+  caption = "Leaderboard",
+  align = "lcc"
+)
+```
+
+Macao SAR, China and Monaco are the top-ranked territories, maintaining a peak average rank of 1.5 over the 10-year period. To evaluate leadership stability rather than a single-year snapshot, annual ranking was used instead of mean values. Continent-based filtering was intentionally avoided, as these territories frequently have missing (NA) values in the continent field. Including these official statistical units ensures accuracy, as their exclusion would have incorrectly identified Singapore as the leader, failing the criteria for the highest density in the data set.
+
+### Half a century of progress: life expectancy gains
+
+**Question 4. What country (or countries) has shown the greatest increase in 'Life expectancy at birth, total (years)' between 1962 and 2007?**
+
+```{r Life expactancy leaderboard}
+life_data <- original_data |>
+  filter(Year >= 1962 & Year <= 2007) |>
+  filter(!is.na(Year)) |>
+  filter(!is.na(`Life expectancy at birth, total (years)`)) |>
+  group_by(`Country Name`) |>
+  summarise(
+    year_start = min(Year),
+    start_val = `Life expectancy at birth, total (years)`[which.min(Year)],
+    year_end = max(Year),
+    end_val = `Life expectancy at birth, total (years)`[which.max(Year)],
+    total_increase = end_val - start_val,
+    duration = year_end - year_start,
+    annual_rate = ifelse(duration > 0, total_increase / duration, 0)
+  ) |>
+  arrange(desc(annual_rate)) |>
+  slice_max(annual_rate, n = 10)
+
+life_leaderboard <- life_data |>
+  pivot_longer(
+    cols = c(start_val, end_val),
+    names_to = "type",
+    values_to = "life_expectancy"
+  ) |>
+  mutate(year = ifelse(type == "start_val", year_start, year_end)) |>
+  pivot_wider(
+    id_cols = `Country Name`,
+    names_from = year,
+    values_from = life_expectancy
+  ) |>
+  left_join(
+    life_data |> select(`Country Name`, total_increase, annual_rate),
+    by = "Country Name"
+  ) |>
+  rename(
+    `Total increase` = total_increase,
+    `Annual rate` = annual_rate
+  )
+
+kable(life_leaderboard,
+  digits = 2,
+  caption = "Leaderboard",
+  align = "lccc",
+)
+```
+
+The Maldives experienced the highest increase in life expectancy between 1962 and 2007. During this period, the figure rose by 36.9 years (from 38.5 to 75.4 years), representing an average annual growth rate of 0.82 years. Other countries demonstrating significant progress include Bhutan (+33.2 years) and Timor-Leste (+31.1 years).
