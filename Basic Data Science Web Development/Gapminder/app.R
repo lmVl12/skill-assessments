@@ -8,42 +8,45 @@ library(knitr) # General-purpose tool for dynamic report generation
 library(kableExtra) # Advanced styling for HTML and PDF tables
 library(viridis)
 library(shinyWidgets)
+library(bslib)
 
 gapminder_data <- read_csv("../gapminder_clean.csv", col_select = -1)
 available_years <- sort(unique(gapminder_data$Year))
 
 # Define UI for application 
 ui <- fluidPage(
-    titlePanel("Gapminder Analysis"),
-    sidebarLayout(
-        sidebarPanel(
-          selectInput("x", "X variable", choices = names(gapminder_data), selected = "gdpPercap"),
-          selectInput("y", "Y variable", choices = names(gapminder_data), selected = "CO2 emissions (metric tons per capita)"),
-          selectInput("color", "Map to color", choices = names(gapminder_data), selected = "continent"),
-          selectInput("size", "Map to size", choices = names(gapminder_data), selected = "pop"),
-          sliderTextInput("year",
-                          "Year",
-                          grid = TRUE,
-                          choices = available_years,
-                          selected = min(available_years),
-                          animate = TRUE),
-          checkboxInput("log_x", "Log scale X", FALSE),
-          checkboxInput("log_y", "Log scale Y", FALSE),
-          checkboxInput("trend", "Show trend line"),
-          selectInput("smooth_method", "Trend line type", 
-                      choices = c("Linear" = "lm", "Smooth" = "loess"),
-                      selected = "lm")
-          ),
+  theme = bs_theme(bootswatch = "flatly"),  
+  titlePanel("Gapminder Analysis"),
+  layout_sidebar(
+      sidebar = sidebar(
+        bg = "#333333",
+        selectInput("x", "X variable", choices = names(gapminder_data), selected = "gdpPercap"),
+        selectInput("y", "Y variable", choices = names(gapminder_data), selected = "CO2 emissions (metric tons per capita)"),
+        selectInput("color", "Map to color", choices = names(gapminder_data), selected = "continent"),
+        selectInput("size", "Map to size", choices = names(gapminder_data), selected = "pop"),
+        sliderTextInput("year",
+                        "Year",
+                        grid = TRUE,
+                        choices = available_years,
+                        selected = min(available_years),
+                        animate = TRUE),
+        checkboxInput("log_x", "Log scale X", FALSE),
+        checkboxInput("log_y", "Log scale Y", FALSE),
+        checkboxInput("trend", "Show trend line"),
+        selectInput("smooth_method", "Trend line type", 
+                    choices = c("Linear" = "lm", "Smooth" = "loess"),
+                    selected = "lm")
+        ),
 
         # Show a plot of the generated distribution
         mainPanel(
-            plotlyOutput("plot"),
+            card(plotlyOutput("plot")),
             textInput("highlight_country", "Highlight country", placeholder = "Enter country name"),
             textOutput("correlation")
             )
         
     ),
-    DT::dataTableOutput("country_table")
+    card(DT::dataTableOutput("country_table"))
 )
 # Define server logic 
 server <- function(input, output) {
