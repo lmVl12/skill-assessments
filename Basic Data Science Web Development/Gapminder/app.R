@@ -12,18 +12,19 @@ library(bslib)
 
 gapminder_data <- read_csv("../gapminder_clean.csv", col_select = -1)
 available_years <- sort(unique(gapminder_data$Year))
+plot_vars <- names(gapminder_data)[!names(gapminder_data) %in% c("Country Name", "Year")]
 
 # Define UI for application 
 ui <- fluidPage(
   theme = bs_theme(bootswatch = "flatly"),  
-  titlePanel("Gapminder Analysis"),
+  titlePanel("Gapminder Analysis Shiny"),
   layout_sidebar(
       sidebar = sidebar(
         bg = "#333333",
-        selectInput("x", "X variable", choices = names(gapminder_data), selected = "gdpPercap"),
-        selectInput("y", "Y variable", choices = names(gapminder_data), selected = "CO2 emissions (metric tons per capita)"),
-        selectInput("color", "Map to color", choices = names(gapminder_data), selected = "continent"),
-        selectInput("size", "Map to size", choices = names(gapminder_data), selected = "pop"),
+        selectInput("x", "X variable", choices = plot_vars, selected = "gdpPercap"),
+        selectInput("y", "Y variable", choices = plot_vars, selected = "CO2 emissions (metric tons per capita)"),
+        selectInput("color", "Map to color", choices = c("None", plot_vars), selected = "continent"),
+        selectInput("size", "Map to size", choices = c("None", plot_vars), selected = "pop"),
         sliderTextInput("year",
                         "Year",
                         grid = TRUE,
@@ -40,10 +41,10 @@ ui <- fluidPage(
 
         # Show a plot of the generated distribution
         mainPanel(
-            card(plotlyOutput("plot")),
-            textInput("highlight_country", "Highlight country", placeholder = "Enter country name"),
-            textOutput("correlation")
-            )
+          textInput("highlight_country", "Highlight country", placeholder = "Enter country name"),
+          card(plotlyOutput("plot")),
+          textOutput("correlation")
+          )
         
     ),
     card(DT::dataTableOutput("country_table"))
@@ -64,9 +65,18 @@ server <- function(input, output) {
       drop_na() |>
       nrow()
     
-    p <- ggplot(plot_data, aes(.data[[input$x]], .data[[input$y]], text = `Country Name`)) +
-      geom_point(aes(color = .data[[input$color]], size = .data[[input$size]]))+
-      geom_point(data = filter(plot_data, highlight == "selected"),
+    p <- ggplot(plot_data, aes(.data[[input$x]], .data[[input$y]], text = `Country Name`))
+    if (input$color != "None" & input$size != "None") {
+      p <- p + geom_point(aes(color = .data[[input$color]], size = .data[[input$size]]))
+    } else if (input$color != "None") {
+      p <- p + geom_point(aes(color = .data[[input$color]]))
+    } else if (input$size != "None") {
+      p <- p + geom_point(aes(size = .data[[input$size]]))
+    } else {
+      p <- p + geom_point()
+    }
+      
+    p <- p+ geom_point(data = filter(plot_data, highlight == "selected"),
                  color = "red", size = 3)
     if (input$log_x) p <- p + scale_x_log10()
     if (input$log_y) p <- p + scale_y_log10()
