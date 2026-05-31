@@ -14,10 +14,10 @@ This repository contains a collection of assessment tasks provided by the **Bioi
 | **R for Data Science** | ✅ Completed | [View Report](https://lmvl12.github.io/skill-assessments/R%20for%20Data%20Science/r4ds.html) |
 | **Python Programming (tic-tac-toe)** | ✅ Completed | — |
 | **R Programming (tic-tac-toe)** | ✅ Completed | — |
+| **Basic Data Science Web Development** | ✅ Completed | [View App in web](https://lmvl12.shinyapps.io/Gapminder/) |
 | **ChIP-Seq Analysis** | ⏳ In Progress | — |
 | **Working with Genomic Variant Files** | ⏳ In Progress | — |
 | **Back-End Web Development** | ⏳ In Progress | — |
-| **Basic Data Science Web Development** | ⏳ In Progress | — |
 | **Front-End Web Development** | ⏳ In Progress | — |
 | **Linux for Bioinformatics** | ⏳ In Progress | — |
 
