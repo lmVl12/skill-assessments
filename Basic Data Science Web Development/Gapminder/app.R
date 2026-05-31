@@ -6,8 +6,9 @@ library(broom)         # tidy() for model outputs
 library(shinyWidgets)  # sliderTextInput
 library(bslib)         # modern UI theming
 
+
 # ── Data ──────────────────────────────────────────────────────────────────────
-gapminder_data <- read_csv("../gapminder_clean.csv", col_select = -1)  # skip index column
+gapminder_data <- read_csv("gapminder_clean.csv", col_select = -1)  # skip index column
 available_years <- sort(unique(gapminder_data$Year))                    # for slider choices
 plot_vars <- names(gapminder_data)[!names(gapminder_data) %in% c("Country Name", "Year")]  # numeric/categorical vars only
 
