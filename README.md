@@ -9,14 +9,14 @@ This repository contains a collection of assessment tasks provided by the **Bioi
 | **Single-Cell RNA-Seq Analysis** | ✅ Completed | [View Report](https://lmvl12.github.io/skill-assessments/Single-Cell%20RNA-Seq%20Analysis/Single-Cell-RNA-Seq.html) |
 | **Advanced RNA-Seq** | ✅ Completed | [View Report](https://lmvl12.github.io/skill-assessments/RNA-Seq%20Analysis%20(advanced)/Caki-1_rna_seq.html) |
 | **RNA-Seq** | ✅ Completed | [View Report](https://lmvl12.github.io/skill-assessments/RNA-Seq%20Analysis/Ewing_sarcoma.html) |
+| **Working with Genomic Variant Files** | ✅ Completed  | [View Report](https://lmvl12.github.io/skill-assessments/Working%20with%20Genomic%20Variant%20Files/vcf_maf_analysis.html)|
+| **Basic Data Science Web Development** | ✅ Completed | [View App in web](https://lmvl12.shinyapps.io/Gapminder/) |
 | **Machine Learning (Titanic)** | ✅ Completed | [Kaggle](https://www.kaggle.com/code/mila2000/titanic)|
 | **Python for Data Science** | ✅ Completed | [View Report](https://lmvl12.github.io/skill-assessments/Python%20for%20Data%20Science/gapminder_analysis.html) |
 | **R for Data Science** | ✅ Completed | [View Report](https://lmvl12.github.io/skill-assessments/R%20for%20Data%20Science/r4ds.html) |
 | **Python Programming (tic-tac-toe)** | ✅ Completed | — |
 | **R Programming (tic-tac-toe)** | ✅ Completed | — |
-| **Basic Data Science Web Development** | ✅ Completed | [View App in web](https://lmvl12.shinyapps.io/Gapminder/) |
 | **ChIP-Seq Analysis** | ⏳ In Progress | — |
-| **Working with Genomic Variant Files** | ⏳ In Progress | — |
 | **Back-End Web Development** | ⏳ In Progress | — |
 | **Front-End Web Development** | ⏳ In Progress | — |
 | **Linux for Bioinformatics** | ⏳ In Progress | — |
