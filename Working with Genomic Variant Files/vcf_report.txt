@@ -1,0 +1,223 @@
+# This file was produced by bcftools stats (1.23.1+htslib-1.23.1) and can be plotted using plot-vcfstats.
+# The command line was:	bcftools stats  CEU.exon.2010_03.genotypes.vcf.gz
+#
+# Definition of sets:
+# ID	[2]id	[3]tab-separated file names
+ID	0	CEU.exon.2010_03.genotypes.vcf.gz
+# SN, Summary numbers:
+#   number of records   .. number of data rows in the VCF
+#   number of no-ALTs   .. reference-only sites, ALT is either "." or identical to REF
+#   number of SNPs      .. number of rows with a SNP
+#   number of MNPs      .. number of rows with a MNP, such as CC>TT
+#   number of indels    .. number of rows with an indel
+#   number of others    .. number of rows with other type, for example a symbolic allele or
+#                          a complex substitution, such as ACT>TCGA
+#   number of multiallelic sites     .. number of rows with multiple alternate alleles
+#   number of multiallelic SNP sites .. number of rows with multiple alternate alleles, all SNPs
+# 
+#   Note that rows containing multiple types will be counted multiple times, in each
+#   counter. For example, a row with a SNP and an indel increments both the SNP and
+#   the indel counter.
+# 
+# SN	[2]id	[3]key	[4]value
+SN	0	number of samples:	90
+SN	0	number of records:	3489
+SN	0	number of no-ALTs:	0
+SN	0	number of SNPs:	3489
+SN	0	number of MNPs:	0
+SN	0	number of indels:	0
+SN	0	number of others:	0
+SN	0	number of multiallelic sites:	0
+SN	0	number of multiallelic SNP sites:	0
+# TSTV, transitions/transversions
+#   - transitions, see https://en.wikipedia.org/wiki/Transition_(genetics)
+#   - transversions, see https://en.wikipedia.org/wiki/Transversion
+# TSTV	[2]id	[3]ts	[4]tv	[5]ts/tv	[6]ts (1st ALT)	[7]tv (1st ALT)	[8]ts/tv (1st ALT)
+TSTV	0	2708	781	3.47	2708	781	3.47
+# SiS, Singleton stats:
+#   - allele count, i.e. the number of singleton genotypes (AC=1)
+#   - number of transitions, see above
+#   - number of transversions, see above
+#   - repeat-consistent, inconsistent and n/a: experimental and useless stats [DEPRECATED]
+# SiS	[2]id	[3]allele count	[4]number of SNPs	[5]number of transitions	[6]number of transversions	[7]number of indels	[8]repeat-consistent	[9]repeat-inconsistent	[10]not applicable
+SiS	0	1	1075	837	238	0	0	0	0
+# AF, Stats by non-reference allele frequency:
+# AF	[2]id	[3]allele frequency	[4]number of SNPs	[5]number of transitions	[6]number of transversions	[7]number of indels	[8]repeat-consistent	[9]repeat-inconsistent	[10]not applicable
+AF	0	0.000000	1084	844	240	0	0	0	0
+AF	0	0.010000	452	358	94	0	0	0	0
+AF	0	0.020000	234	181	53	0	0	0	0
+AF	0	0.030000	154	112	42	0	0	0	0
+AF	0	0.040000	86	75	11	0	0	0	0
+AF	0	0.050000	81	68	13	0	0	0	0
+AF	0	0.060000	66	47	19	0	0	0	0
+AF	0	0.070000	48	35	13	0	0	0	0
+AF	0	0.080000	43	31	12	0	0	0	0
+AF	0	0.090000	61	50	11	0	0	0	0
+AF	0	0.100000	35	28	7	0	0	0	0
+AF	0	0.110000	36	28	8	0	0	0	0
+AF	0	0.120000	26	20	6	0	0	0	0
+AF	0	0.130000	23	15	8	0	0	0	0
+AF	0	0.140000	34	26	8	0	0	0	0
+AF	0	0.150000	25	21	4	0	0	0	0
+AF	0	0.160000	28	25	3	0	0	0	0
+AF	0	0.170000	24	17	7	0	0	0	0
+AF	0	0.180000	30	23	7	0	0	0	0
+AF	0	0.190000	30	22	8	0	0	0	0
+AF	0	0.200000	27	21	6	0	0	0	0
+AF	0	0.210000	26	20	6	0	0	0	0
+AF	0	0.220000	25	16	9	0	0	0	0
+AF	0	0.230000	31	26	5	0	0	0	0
+AF	0	0.240000	20	12	8	0	0	0	0
+AF	0	0.250000	28	20	8	0	0	0	0
+AF	0	0.260000	19	18	1	0	0	0	0
+AF	0	0.270000	18	13	5	0	0	0	0
+AF	0	0.280000	19	15	4	0	0	0	0
+AF	0	0.290000	25	18	7	0	0	0	0
+AF	0	0.300000	16	15	1	0	0	0	0
+AF	0	0.310000	17	14	3	0	0	0	0
+AF	0	0.320000	4	3	1	0	0	0	0
+AF	0	0.330000	19	15	4	0	0	0	0
+AF	0	0.340000	9	8	1	0	0	0	0
+AF	0	0.350000	11	6	5	0	0	0	0
+AF	0	0.360000	14	12	2	0	0	0	0
+AF	0	0.370000	15	12	3	0	0	0	0
+AF	0	0.380000	10	6	4	0	0	0	0
+AF	0	0.390000	17	11	6	0	0	0	0
+AF	0	0.400000	15	12	3	0	0	0	0
+AF	0	0.410000	14	10	4	0	0	0	0
+AF	0	0.420000	9	8	1	0	0	0	0
+AF	0	0.430000	7	6	1	0	0	0	0
+AF	0	0.440000	13	10	3	0	0	0	0
+AF	0	0.450000	11	10	1	0	0	0	0
+AF	0	0.460000	10	6	4	0	0	0	0
+AF	0	0.470000	8	6	2	0	0	0	0
+AF	0	0.480000	14	11	3	0	0	0	0
+AF	0	0.490000	11	5	6	0	0	0	0
+AF	0	0.500000	15	12	3	0	0	0	0
+AF	0	0.510000	5	3	2	0	0	0	0
+AF	0	0.520000	8	6	2	0	0	0	0
+AF	0	0.530000	8	5	3	0	0	0	0
+AF	0	0.540000	15	12	3	0	0	0	0
+AF	0	0.550000	6	4	2	0	0	0	0
+AF	0	0.560000	13	11	2	0	0	0	0
+AF	0	0.570000	10	7	3	0	0	0	0
+AF	0	0.580000	10	8	2	0	0	0	0
+AF	0	0.590000	12	10	2	0	0	0	0
+AF	0	0.600000	11	9	2	0	0	0	0
+AF	0	0.610000	7	5	2	0	0	0	0
+AF	0	0.620000	8	7	1	0	0	0	0
+AF	0	0.630000	11	9	2	0	0	0	0
+AF	0	0.640000	8	3	5	0	0	0	0
+AF	0	0.650000	7	6	1	0	0	0	0
+AF	0	0.660000	14	13	1	0	0	0	0
+AF	0	0.670000	12	9	3	0	0	0	0
+AF	0	0.680000	8	7	1	0	0	0	0
+AF	0	0.690000	11	8	3	0	0	0	0
+AF	0	0.700000	6	4	2	0	0	0	0
+AF	0	0.710000	5	5	0	0	0	0	0
+AF	0	0.720000	2	2	0	0	0	0	0
+AF	0	0.730000	8	6	2	0	0	0	0
+AF	0	0.740000	8	6	2	0	0	0	0
+AF	0	0.750000	5	3	2	0	0	0	0
+AF	0	0.760000	6	4	2	0	0	0	0
+AF	0	0.770000	10	5	5	0	0	0	0
+AF	0	0.780000	7	6	1	0	0	0	0
+AF	0	0.790000	2	2	0	0	0	0	0
+AF	0	0.800000	4	3	1	0	0	0	0
+AF	0	0.810000	6	5	1	0	0	0	0
+AF	0	0.820000	5	4	1	0	0	0	0
+AF	0	0.830000	11	7	4	0	0	0	0
+AF	0	0.840000	3	3	0	0	0	0	0
+AF	0	0.850000	5	5	0	0	0	0	0
+AF	0	0.860000	7	6	1	0	0	0	0
+AF	0	0.870000	5	4	1	0	0	0	0
+AF	0	0.880000	7	6	1	0	0	0	0
+AF	0	0.890000	7	5	2	0	0	0	0
+AF	0	0.900000	4	3	1	0	0	0	0
+AF	0	0.910000	2	1	1	0	0	0	0
+AF	0	0.920000	3	2	1	0	0	0	0
+AF	0	0.930000	4	4	0	0	0	0	0
+AF	0	0.940000	7	6	1	0	0	0	0
+AF	0	0.950000	3	3	0	0	0	0	0
+AF	0	0.960000	11	8	3	0	0	0	0
+AF	0	0.970000	7	5	2	0	0	0	0
+AF	0	0.980000	8	7	1	0	0	0	0
+AF	0	0.990000	40	33	7	0	0	0	0
+# QUAL, Stats by quality
+# QUAL	[2]id	[3]Quality	[4]number of SNPs	[5]number of transitions (1st ALT)	[6]number of transversions (1st ALT)	[7]number of indels
+QUAL	0	.	3489	2708	781	0
+# IDD, InDel distribution:
+# IDD	[2]id	[3]length (deletions negative)	[4]number of sites	[5]number of genotypes	[6]mean VAF
+# ST, Substitution types:
+# ST	[2]id	[3]type	[4]count
+ST	0	A>C	66
+ST	0	A>G	443
+ST	0	A>T	34
+ST	0	C>A	135
+ST	0	C>G	138
+ST	0	C>T	866
+ST	0	G>A	956
+ST	0	G>C	150
+ST	0	G>T	128
+ST	0	T>A	65
+ST	0	T>C	443
+ST	0	T>G	65
+# DP, depth:
+#   - set id, see above
+#   - the depth bin, corresponds to the depth (unless --depth was given)
+#   - number of genotypes with this depth (zero unless -s/-S was given)
+#   - fraction of genotypes with this depth (zero unless -s/-S was given)
+#   - number of sites with this depth
+#   - fraction of sites with this depth
+# DP, Depth distribution
+# DP	[2]id	[3]bin	[4]number of genotypes	[5]fraction of genotypes (%)	[6]number of sites	[7]fraction of sites (%)
+DP	0	48	0	0.000000	1	0.028662
+DP	0	51	0	0.000000	1	0.028662
+DP	0	56	0	0.000000	1	0.028662
+DP	0	57	0	0.000000	1	0.028662
+DP	0	71	0	0.000000	1	0.028662
+DP	0	81	0	0.000000	1	0.028662
+DP	0	95	0	0.000000	1	0.028662
+DP	0	98	0	0.000000	1	0.028662
+DP	0	134	0	0.000000	1	0.028662
+DP	0	148	0	0.000000	1	0.028662
+DP	0	167	0	0.000000	1	0.028662
+DP	0	199	0	0.000000	1	0.028662
+DP	0	203	0	0.000000	1	0.028662
+DP	0	204	0	0.000000	1	0.028662
+DP	0	208	0	0.000000	1	0.028662
+DP	0	222	0	0.000000	1	0.028662
+DP	0	229	0	0.000000	1	0.028662
+DP	0	264	0	0.000000	1	0.028662
+DP	0	267	0	0.000000	2	0.057323
+DP	0	279	0	0.000000	1	0.028662
+DP	0	289	0	0.000000	1	0.028662
+DP	0	300	0	0.000000	1	0.028662
+DP	0	302	0	0.000000	1	0.028662
+DP	0	305	0	0.000000	1	0.028662
+DP	0	310	0	0.000000	1	0.028662
+DP	0	316	0	0.000000	1	0.028662
+DP	0	319	0	0.000000	1	0.028662
+DP	0	320	0	0.000000	1	0.028662
+DP	0	326	0	0.000000	1	0.028662
+DP	0	353	0	0.000000	1	0.028662
+DP	0	357	0	0.000000	1	0.028662
+DP	0	360	0	0.000000	1	0.028662
+DP	0	367	0	0.000000	1	0.028662
+DP	0	371	0	0.000000	1	0.028662
+DP	0	374	0	0.000000	1	0.028662
+DP	0	384	0	0.000000	1	0.028662
+DP	0	388	0	0.000000	1	0.028662
+DP	0	406	0	0.000000	1	0.028662
+DP	0	409	0	0.000000	1	0.028662
+DP	0	417	0	0.000000	1	0.028662
+DP	0	419	0	0.000000	1	0.028662
+DP	0	423	0	0.000000	2	0.057323
+DP	0	424	0	0.000000	1	0.028662
+DP	0	431	0	0.000000	1	0.028662
+DP	0	433	0	0.000000	1	0.028662
+DP	0	438	0	0.000000	1	0.028662
+DP	0	444	0	0.000000	1	0.028662
+DP	0	446	0	0.000000	1	0.028662
+DP	0	489	0	0.000000	1	0.028662
+DP	0	>500	0	0.000000	3438	98.538263
